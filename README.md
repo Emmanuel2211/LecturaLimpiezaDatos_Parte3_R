@@ -1,8 +1,4 @@
-# Ejercicio: Lectura y Limpieza de Datos de Café — R
-
-**Archivo principal:** `calidad_cafe.Rmd`  
-**Dataset:** `coffee_ratings.csv` (1,339 filas × 43 columnas)  
-**Lenguaje:** R con R Markdown  
+# Ejercicio: Lectura y Limpieza de Datos Parte 3 — R
 
 ## Descripción del proyecto
 
