@@ -1,6 +1,5 @@
 ---
 title: 'Ejercicio: Lectura y Limpieza de Datos de Café'
-author: "Emmanuel"
 date: "`r Sys.Date()`"
 output:
   pdf_document:
