@@ -1,8 +1,10 @@
 ---
-title: "Ejercicio: Lectura y Limpieza de Datos de Café"
+title: 'Ejercicio: Lectura y Limpieza de Datos de Café'
 author: "Emmanuel"
 date: "`r Sys.Date()`"
 output:
+  pdf_document:
+    toc: true
   html_document:
     toc: true
     toc_float: true
