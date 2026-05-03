@@ -23,10 +23,8 @@ knitr::opts_chunk$set(
 ```
 
 ```{r librerias}
-# Si GGally no está instalado: install.packages("GGally")
-library(tidyverse)   # dplyr, ggplot2, stringr, tidyr, purrr, readr, lubridate (dentro de tidyverse)
-library(lubridate)   # manejo de fechas (ymd, etc.)
-library(GGally)      # ggpairs para matrices de dispersión
+library(tidyverse)   
+library(lubridate)
 ```
 
 ```{r carga_datos}
@@ -53,18 +51,17 @@ Se utilizó `readr::read_csv()` para cargar el dataset, función del paquete `re
 El dataset contiene **1,339 filas y 43 columnas**. De ellas, **19 presentan valores faltantes**. La columna más afectada es `lot_number` (79.39 %), seguida de `farm_name` (26.81 %) y `mill` (23.75 %). Columnas relevantes para las actividades siguientes como `color` (20.16 %), `processing_method` (12.70 %) y `harvest_year` (3.51 %) también tienen ausencias.
 
 ```{r actividad0}
-na_counts <- colSums(is.na(datos))
+na_counts <- datos |> is.na() |> colSums()
 
-resumen_na <- data.frame(
-  columna            = names(na_counts),
-  valores_faltantes  = as.integer(na_counts),
-  porcentaje         = round(na_counts / nrow(datos) * 100, 2),
-  row.names = NULL
+resumen_na <- tibble(
+  columna           = na_counts |> names(),
+  valores_faltantes = na_counts |> as.integer(),
+  porcentaje        = (na_counts / nrow(datos) * 100) |> round(2)
 ) |>
   filter(valores_faltantes > 0) |>
   arrange(desc(valores_faltantes))
 
-print(resumen_na, row.names = FALSE)
+resumen_na |> print(row.names = FALSE)
 ```
 
 ---
@@ -92,7 +89,7 @@ datos <- datos |>
       color == "Green"       ~ "#00FF66",
       color == "Bluish-Green"~ "#CCEBC5",
       color == "Blue-Green"  ~ "#BFFFFF",
-      TRUE                   ~ NA_character_   # cualquier valor no reconocido
+      TRUE                   ~ NA_character_
     )
   )
 
@@ -128,12 +125,13 @@ datos <- datos |>
     bag_weight2 = if_else(
       str_detect(bag_weight, ","),
       NA_real_,
-      as.numeric(str_extract(bag_weight, "\\d+(\\.\\d+)?"))
+      bag_weight |> str_extract("\\d+(\\.\\d+)?") |> as.numeric()
     )
   )
 
+vals_ambiguos_bw <- ambiguos_bw$bag_weight |> unique()
 cat(sprintf("Observaciones ambiguas en bag_weight: %d\n", nrow(ambiguos_bw)))
-cat("Valores ambiguos únicos:", unique(ambiguos_bw$bag_weight), "\n")
+cat("Valores ambiguos únicos:", vals_ambiguos_bw, "\n")
 ```
 
 ---
@@ -158,13 +156,14 @@ pm_match <- str_match(datos$processing_method, "^(.+?)\\s*/\\s*(.+)$")
 
 datos <- datos |>
   mutate(
-    method1 = str_trim(pm_match[, 2]),
-    method2 = str_trim(pm_match[, 3])
+    method1 = pm_match[, 2] |> str_trim(),
+    method2 = pm_match[, 3] |> str_trim()
   )
 
-n_ambiguos_pm <- sum(is.na(pm_match[, 1]))
+n_ambiguos_pm  <- pm_match[, 1] |> is.na() |> sum()
+vals_ambiguos_pm <- datos$processing_method[pm_match[, 1] |> is.na()] |> unique()
 cat(sprintf("Observaciones ambiguas en processing_method: %d\n", n_ambiguos_pm))
-cat("Valores únicos ambiguos:", unique(datos$processing_method[is.na(pm_match[, 1])]), "\n")
+cat("Valores únicos ambiguos:", vals_ambiguos_pm, "\n")
 ```
 
 ---
@@ -196,14 +195,17 @@ exp_match <- str_match(
 datos <- datos |>
   mutate(
     expiration_month = exp_match[, 2],
-    expiration_day   = as.integer(exp_match[, 3]),
-    expiration_year  = as.integer(exp_match[, 4])
+    expiration_day   = exp_match[, 3] |> as.integer(),
+    expiration_year  = exp_match[, 4] |> as.integer()
   )
 
-n_ambiguos_exp <- sum(!is.na(datos$expiration) & is.na(exp_match[, 2]))
+n_ambiguos_exp <- (!is.na(datos$expiration) & is.na(exp_match[, 2])) |> sum()
 cat(sprintf("Observaciones ambiguas en expiration: %d\n", n_ambiguos_exp))
 cat("\nMuestra de las nuevas columnas:\n")
-print(head(select(datos, expiration, expiration_day, expiration_month, expiration_year), 8))
+datos |>
+  select(expiration, expiration_day, expiration_month, expiration_year) |>
+  head(8) |>
+  print()
 ```
 
 ---
@@ -231,17 +233,23 @@ datos <- datos |>
   ) |>
   select(-partes_hy)
 
-n_ambiguos_hy    <- sum(is.na(datos$harvest_anio))
-n_na_originales  <- sum(is.na(datos$harvest_year))
-n_sin_separador  <- sum(is.na(datos$harvest_anio) & !is.na(datos$harvest_year))
+n_ambiguos_hy   <- datos$harvest_anio |> is.na() |> sum()
+n_na_originales <- datos$harvest_year |> is.na() |> sum()
+n_sin_separador <- (is.na(datos$harvest_anio) & !is.na(datos$harvest_year)) |> sum()
 
 cat(sprintf("Observaciones ambiguas en harvest_year: %d\n", n_ambiguos_hy))
 cat(sprintf("  · NaN originales en harvest_year:        %d\n", n_na_originales))
 cat(sprintf("  · Valores sin separador divisible:        %d\n", n_sin_separador))
 cat("\nValores únicos sin separador (no NA):\n")
-print(sort(unique(datos$harvest_year[is.na(datos$harvest_anio) & !is.na(datos$harvest_year)])))
+datos$harvest_year[is.na(datos$harvest_anio) & !is.na(datos$harvest_year)] |>
+  unique() |>
+  sort() |>
+  print()
 cat("\nMuestra de las nuevas columnas:\n")
-print(head(select(datos, harvest_year, harvest_mes, harvest_anio), 10))
+datos |>
+  select(harvest_year, harvest_mes, harvest_anio) |>
+  head(10) |>
+  print()
 ```
 
 ---
@@ -362,7 +370,7 @@ df8 <- datos |>
   drop_na(expiration_year, expiration_month, total_cup_points) |>
   mutate(
     mes_num   = month_num[expiration_month],
-    fecha_exp = ymd(paste(expiration_year, mes_num, "01", sep = "-"))
+    fecha_exp = paste(expiration_year, mes_num, "01", sep = "-") |> ymd()
   ) |>
   group_by(fecha_exp, country_of_origin) |>
   summarise(total_cup_points = mean(total_cup_points, na.rm = TRUE), .groups = "drop") |>
@@ -459,42 +467,53 @@ ggplot(df9, aes(x = expiration_month, y = altitud_metros,
 
 **Procedimiento:**
 
-Se utilizó `GGally::ggpairs()`, que crea una **matriz de gráficos** (pairplot) mostrando todas las relaciones bivariadas en un solo lienzo. Las funciones y argumentos importantes son:
+Se usó exclusivamente `tidyverse` (sin paquetes adicionales). La estrategia combina `pivot_longer()` y `facet_wrap()` para mostrar las tres variables en un mismo canvas:
 
-- **`GGally::ggpairs(data, columns, mapping, diag, upper, lower)`**:
-  - `columns`: índices o nombres de las columnas numéricas a incluir.
-  - `mapping = aes(color = species, alpha = 0.5)`: mapeo global aplicado a todos los subgráficos; diferencia las especies por color.
-  - `diag = list(continuous = wrap("densityDiag", ...))`: define qué gráfico se coloca en la **diagonal** (estimación de densidad por especie).
-  - `upper` / `lower`: definen los gráficos del triángulo **superior** e **inferior** (puntos de dispersión semitransparentes).
-  - `columnLabels`: etiquetas personalizadas para cada eje/panel.
-- **`wrap("geom", ...)`**: función auxiliar de `GGally` que envuelve un tipo de geom con parámetros fijos para usarlo como argumento de `diag`, `upper` o `lower`.
-- **`scale_color_brewer()` / `scale_fill_brewer()`**: se aplican globalmente al objeto `ggpairs` mediante `+` igual que en `ggplot2`.
-- **`theme_bw()`**: tema limpio aplicable al objeto completo.
+- **`tidyr::pivot_longer(cols, names_to, values_to)`**: transforma el data frame de formato ancho a largo. Las tres columnas numéricas (`aftertaste`, `acidity`, `body`) se apilan en una sola columna `valor`, y sus nombres pasan a la columna categórica `variable`. Esto permite tratar las tres métricas como facetas de un mismo gráfico.
+- **`dplyr::case_when()`**: renombra los valores de `variable` al español para las etiquetas del gráfico.
+- **`geom_violin(trim = FALSE)`**: dibuja la distribución completa de cada variable para cada especie como una figura simétrica en forma de violín. `trim = FALSE` extiende las colas hasta los valores extremos reales.
+- **`geom_boxplot()`**: superpuesto al violín, muestra la mediana, los cuartiles y los valores atípicos. El argumento `width` controla el ancho del boxplot para que no tape el violín.
+- **`ggplot2::facet_wrap(~ variable, scales = "free_y")`**: divide el canvas en un panel por cada valor de `variable` (uno por métrica). `scales = "free_y"` permite que cada panel tenga su propia escala vertical, ya que las tres variables tienen rangos similares pero distintos.
+- **`scale_fill_brewer(palette = "Set1")`**: aplica una paleta cualitativa distinguible para las especies.
 
 **Resultados:**
 
-El pairplot revela correlaciones positivas entre las tres variables: cafés con mayor acidez tienden a tener mejor aftertaste y cuerpo. La especie *Arabica* muestra valores más dispersos y generalmente más altos, mientras que *Robusta* se concentra en rangos menores.
+Los tres paneles en un mismo canvas permiten comparar simultáneamente cómo difieren *Arabica* y *Robusta* en aftertaste, acidez y cuerpo. *Arabica* concentra sus valores en rangos superiores y con mayor dispersión; *Robusta* muestra distribuciones más compactas y desplazadas hacia valores menores.
 
-```{r actividad10, fig.width=9, fig.height=8}
+```{r actividad10, fig.width=11, fig.height=6}
 df10 <- datos |>
   select(aftertaste, acidity, body, species) |>
-  drop_na()
+  drop_na() |>
+  pivot_longer(
+    cols      = c(aftertaste, acidity, body),
+    names_to  = "variable",
+    values_to = "valor"
+  ) |>
+  mutate(
+    variable = case_when(
+      variable == "aftertaste" ~ "Aftertaste",
+      variable == "acidity"    ~ "Acidez",
+      variable == "body"       ~ "Cuerpo"
+    )
+  )
 
-ggpairs(
-  df10,
-  columns      = 1:3,
-  mapping      = aes(color = species, alpha = 0.5),
-  diag         = list(continuous = wrap("densityDiag",  alpha = 0.4)),
-  upper        = list(continuous = wrap("points", size = 0.8, alpha = 0.4)),
-  lower        = list(continuous = wrap("points", size = 0.8, alpha = 0.4)),
-  columnLabels = c("Aftertaste", "Acidez", "Cuerpo"),
-  title        = "Relaciones entre Aftertaste, Acidez y Cuerpo del Café por Especie"
-) +
-  scale_color_brewer(palette = "Set1") +
+ggplot(df10, aes(x = species, y = valor, fill = species)) +
+  geom_violin(alpha = 0.45, trim = FALSE, linewidth = 0.6) +
+  geom_boxplot(width = 0.15, alpha = 0.85, outlier.size = 0.8,
+               outlier.alpha = 0.5, linewidth = 0.5) +
+  facet_wrap(~ variable, scales = "free_y", nrow = 1) +
   scale_fill_brewer(palette = "Set1") +
-  theme_bw(base_size = 11) +
+  labs(
+    x     = "Especie",
+    y     = "Puntuación",
+    title = "Distribución de Aftertaste, Acidez y Cuerpo del Café por Especie",
+    fill  = "Especie"
+  ) +
+  theme_bw(base_size = 12) +
   theme(
-    plot.title = element_text(face = "bold", size = 14),
-    strip.text = element_text(size = 10)
+    plot.title   = element_text(face = "bold", size = 14),
+    strip.text   = element_text(face = "bold", size = 12),
+    axis.text.x  = element_text(angle = 15, hjust = 1),
+    legend.position = "none"
   )
 ```
