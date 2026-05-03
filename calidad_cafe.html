@@ -9,7 +9,6 @@
 <meta http-equiv="X-UA-Compatible" content="IE=EDGE" />
 
 
-<meta name="author" content="Emmanuel" />
 
 <meta name="date" content="2026-05-03" />
 
@@ -1668,7 +1667,6 @@ border-radius: 0px;
 
 <h1 class="title toc-ignore">Ejercicio: Lectura y Limpieza de Datos de
 Café</h1>
-<h4 class="author">Emmanuel</h4>
 <h4 class="date">2026-05-03</h4>
 
 </div>
@@ -1966,71 +1964,77 @@ ambigua.</p>
 <h2>Actividad 5: Crear <code>harvest_mes</code> y
 <code>harvest_anio</code> a partir de <code>harvest_year</code></h2>
 <p><strong>Procedimiento:</strong></p>
-<p>La columna <code>harvest_year</code> es muy heterogénea: contiene
-rangos de años (<code>&quot;2016/2017&quot;</code>, <code>&quot;2009-2010&quot;</code>),
-trimestres (<code>&quot;4T/2010&quot;</code>), años simples (<code>&quot;2016&quot;</code>)
-y formatos no estándar (<code>&quot;23 July 2010&quot;</code>,
-<code>&quot;4T72010&quot;</code>). Las funciones clave son:</p>
+<p>La columna <code>harvest_year</code> presenta formatos muy
+heterogéneos: años simples (<code>&quot;2016&quot;</code>), rangos de años
+(<code>&quot;2016/2017&quot;</code>), mes + año (<code>&quot;March 2010&quot;</code>),
+rangos de meses (<code>&quot;August to December&quot;</code>), valores con
+temporada (<code>&quot;Fall 2009&quot;</code>) y valores malformados
+(<code>&quot;4T72010&quot;</code>, <code>&quot;TEST&quot;</code>). Para separar
+correctamente el mes del año se utilizaron <strong>dos expresiones
+regulares independientes</strong> en lugar de un simple
+<code>split</code>:</p>
 <ul>
-<li><strong><code>stringr::str_split(string, pattern, n)</code></strong>:
-divide cada elemento de <code>string</code> en un máximo de
-<code>n</code> partes usando el patrón regex como separador. El
-resultado es una <strong>lista</strong> donde cada elemento es un vector
-de carácter. El patrón <code>&quot;\\s*/\\s*|\\s*-\\s*(?=[0-9])&quot;</code> usa
-el operador alternancia <code>|</code> para dividir en <code>&quot;/&quot;</code>
-o en <code>&quot;-&quot;</code> entre dígitos (lookahead <code>(?=[0-9])</code>
-evita separar en guiones de palabras compuestas).</li>
-<li><strong><code>purrr::map_chr(list, function)</code></strong>: aplica
-una función a cada elemento de una lista y devuelve un vector de tipo
-<code>character</code>. Es el equivalente vectorizado de
-<code>sapply(..., character)</code> con mayor control de tipos.</li>
-<li>Se considera <strong>ambigua</strong> cualquier fila donde
-<code>harvest_anio</code> resulte <code>NA</code>, lo que indica que no
-se encontró un separador y el valor no puede dividirse en dos
-partes.</li>
+<li><code>harvest_anio</code>: extrae el <strong>último año de 4
+dígitos</strong> (patrón <code>19xx</code> o <code>20xx</code>)
+encontrado en el texto, usando <code>stringr::str_extract_all()</code> +
+<code>purrr::map_chr()</code> para tomar el último elemento del vector
+de coincidencias.</li>
+<li><code>harvest_mes</code>: extrae el <strong>primer nombre de
+mes</strong> (inglés o español) o temporada encontrado en el texto,
+usando <code>stringr::str_extract()</code> con
+<code>regex(..., ignore_case = TRUE)</code>.</li>
 </ul>
+<p>Ambas columnas reciben <code>NA</code> cuando su respectivo patrón no
+encuentra coincidencia. Se considera <strong>ambigua</strong> cualquier
+fila donde no es posible extraer el año.</p>
 <p><strong>Resultados:</strong></p>
-<p>La principal fuente de ambigüedad son los años simples
-(<code>&quot;2010&quot;</code>, …, <code>&quot;2018&quot;</code>), los valores malformados
-(<code>&quot;4T72010&quot;</code>) y las fechas completas
-(<code>&quot;23 July 2010&quot;</code>).</p>
-<div class="sourceCode" id="cb24"><pre class="sourceCode r"><code class="sourceCode r"><span id="cb24-1"><a href="#cb24-1" tabindex="-1"></a>datos <span class="ot">&lt;-</span> datos <span class="sc">|&gt;</span></span>
-<span id="cb24-2"><a href="#cb24-2" tabindex="-1"></a>  <span class="fu">mutate</span>(</span>
-<span id="cb24-3"><a href="#cb24-3" tabindex="-1"></a>    <span class="at">partes_hy    =</span> <span class="fu">str_split</span>(harvest_year, <span class="st">&quot;</span><span class="sc">\\</span><span class="st">s*/</span><span class="sc">\\</span><span class="st">s*|</span><span class="sc">\\</span><span class="st">s*-</span><span class="sc">\\</span><span class="st">s*(?=[0-9])&quot;</span>, <span class="at">n =</span> <span class="dv">2</span>),</span>
-<span id="cb24-4"><a href="#cb24-4" tabindex="-1"></a>    <span class="at">harvest_mes  =</span> <span class="fu">map_chr</span>(partes_hy, <span class="sc">~</span> <span class="fu">str_trim</span>(.x[<span class="dv">1</span>])),</span>
-<span id="cb24-5"><a href="#cb24-5" tabindex="-1"></a>    <span class="at">harvest_anio =</span> <span class="fu">map_chr</span>(partes_hy, <span class="sc">~</span> <span class="cf">if</span> (<span class="fu">length</span>(.x) <span class="sc">&gt;=</span> <span class="dv">2</span>) <span class="fu">str_trim</span>(.x[<span class="dv">2</span>]) <span class="cf">else</span> <span class="cn">NA_character_</span>)</span>
-<span id="cb24-6"><a href="#cb24-6" tabindex="-1"></a>  ) <span class="sc">|&gt;</span></span>
-<span id="cb24-7"><a href="#cb24-7" tabindex="-1"></a>  <span class="fu">select</span>(<span class="sc">-</span>partes_hy)</span>
+<p>Con este enfoque, valores como <code>&quot;2014&quot;</code> quedan
+correctamente como <code>harvest_mes=NA</code> y
+<code>harvest_anio=&quot;2014&quot;</code>, y valores como
+<code>&quot;March 2010&quot;</code> quedan como <code>harvest_mes=&quot;March&quot;</code> y
+<code>harvest_anio=&quot;2010&quot;</code>. Las observaciones ambiguas se reducen
+a los casos donde genuinamente no hay año: <code>NA</code> originales,
+rangos de meses sin año (<code>&quot;Abril - Julio&quot;</code>,
+<code>&quot;May-August&quot;</code>) y valores malformados (<code>&quot;TEST&quot;</code>,
+<code>&quot;mmm&quot;</code>).</p>
+<div class="sourceCode" id="cb24"><pre class="sourceCode r"><code class="sourceCode r"><span id="cb24-1"><a href="#cb24-1" tabindex="-1"></a>patron_anio <span class="ot">&lt;-</span> <span class="st">&quot;</span><span class="sc">\\</span><span class="st">b(?:19|20)</span><span class="sc">\\</span><span class="st">d{2}</span><span class="sc">\\</span><span class="st">b&quot;</span></span>
+<span id="cb24-2"><a href="#cb24-2" tabindex="-1"></a>patron_mes  <span class="ot">&lt;-</span> <span class="fu">paste0</span>(</span>
+<span id="cb24-3"><a href="#cb24-3" tabindex="-1"></a>  <span class="st">&quot;</span><span class="sc">\\</span><span class="st">b(?:January|February|March|April|May|June|July|August|September|October|November|December&quot;</span>,</span>
+<span id="cb24-4"><a href="#cb24-4" tabindex="-1"></a>  <span class="st">&quot;|Jan|Feb|Mar|Apr|Jun|Jul|Aug|Sep|Sept|Oct|Nov|Dec&quot;</span>,</span>
+<span id="cb24-5"><a href="#cb24-5" tabindex="-1"></a>  <span class="st">&quot;|Enero|Febrero|Marzo|Abril|Mayo|Junio|Julio|Agosto|Septiembre|Octubre|Noviembre|Diciembre&quot;</span>,</span>
+<span id="cb24-6"><a href="#cb24-6" tabindex="-1"></a>  <span class="st">&quot;|Spring|Summer|Fall|Winter)</span><span class="sc">\\</span><span class="st">b&quot;</span></span>
+<span id="cb24-7"><a href="#cb24-7" tabindex="-1"></a>)</span>
 <span id="cb24-8"><a href="#cb24-8" tabindex="-1"></a></span>
-<span id="cb24-9"><a href="#cb24-9" tabindex="-1"></a>n_ambiguos_hy   <span class="ot">&lt;-</span> datos<span class="sc">$</span>harvest_anio <span class="sc">|&gt;</span> <span class="fu">is.na</span>() <span class="sc">|&gt;</span> <span class="fu">sum</span>()</span>
-<span id="cb24-10"><a href="#cb24-10" tabindex="-1"></a>n_na_originales <span class="ot">&lt;-</span> datos<span class="sc">$</span>harvest_year <span class="sc">|&gt;</span> <span class="fu">is.na</span>() <span class="sc">|&gt;</span> <span class="fu">sum</span>()</span>
-<span id="cb24-11"><a href="#cb24-11" tabindex="-1"></a>n_sin_separador <span class="ot">&lt;-</span> (<span class="fu">is.na</span>(datos<span class="sc">$</span>harvest_anio) <span class="sc">&amp;</span> <span class="sc">!</span><span class="fu">is.na</span>(datos<span class="sc">$</span>harvest_year)) <span class="sc">|&gt;</span> <span class="fu">sum</span>()</span>
-<span id="cb24-12"><a href="#cb24-12" tabindex="-1"></a></span>
-<span id="cb24-13"><a href="#cb24-13" tabindex="-1"></a><span class="fu">cat</span>(<span class="fu">sprintf</span>(<span class="st">&quot;Observaciones ambiguas en harvest_year: %d</span><span class="sc">\n</span><span class="st">&quot;</span>, n_ambiguos_hy))</span></code></pre></div>
-<pre><code>## Observaciones ambiguas en harvest_year: 1196</code></pre>
+<span id="cb24-9"><a href="#cb24-9" tabindex="-1"></a>datos <span class="ot">&lt;-</span> datos <span class="sc">|&gt;</span></span>
+<span id="cb24-10"><a href="#cb24-10" tabindex="-1"></a>  <span class="fu">mutate</span>(</span>
+<span id="cb24-11"><a href="#cb24-11" tabindex="-1"></a>    <span class="at">harvest_anio =</span> <span class="fu">map_chr</span>(</span>
+<span id="cb24-12"><a href="#cb24-12" tabindex="-1"></a>      <span class="fu">str_extract_all</span>(harvest_year, patron_anio),</span>
+<span id="cb24-13"><a href="#cb24-13" tabindex="-1"></a>      <span class="sc">~</span> { v <span class="ot">&lt;-</span> .x[<span class="sc">!</span><span class="fu">is.na</span>(.x)]; <span class="cf">if</span> (<span class="fu">length</span>(v) <span class="sc">==</span> <span class="dv">0</span>) <span class="cn">NA_character_</span> <span class="cf">else</span> <span class="fu">tail</span>(v, <span class="dv">1</span>) }</span>
+<span id="cb24-14"><a href="#cb24-14" tabindex="-1"></a>    ),</span>
+<span id="cb24-15"><a href="#cb24-15" tabindex="-1"></a>    <span class="at">harvest_mes =</span> <span class="fu">str_extract</span>(harvest_year, <span class="fu">regex</span>(patron_mes, <span class="at">ignore_case =</span> <span class="cn">TRUE</span>))</span>
+<span id="cb24-16"><a href="#cb24-16" tabindex="-1"></a>  )</span>
+<span id="cb24-17"><a href="#cb24-17" tabindex="-1"></a></span>
+<span id="cb24-18"><a href="#cb24-18" tabindex="-1"></a>n_ambiguos_hy   <span class="ot">&lt;-</span> datos<span class="sc">$</span>harvest_anio <span class="sc">|&gt;</span> <span class="fu">is.na</span>() <span class="sc">|&gt;</span> <span class="fu">sum</span>()</span>
+<span id="cb24-19"><a href="#cb24-19" tabindex="-1"></a>n_na_originales <span class="ot">&lt;-</span> datos<span class="sc">$</span>harvest_year <span class="sc">|&gt;</span> <span class="fu">is.na</span>() <span class="sc">|&gt;</span> <span class="fu">sum</span>()</span>
+<span id="cb24-20"><a href="#cb24-20" tabindex="-1"></a>n_sin_anio      <span class="ot">&lt;-</span> (<span class="fu">is.na</span>(datos<span class="sc">$</span>harvest_anio) <span class="sc">&amp;</span> <span class="sc">!</span><span class="fu">is.na</span>(datos<span class="sc">$</span>harvest_year)) <span class="sc">|&gt;</span> <span class="fu">sum</span>()</span>
+<span id="cb24-21"><a href="#cb24-21" tabindex="-1"></a></span>
+<span id="cb24-22"><a href="#cb24-22" tabindex="-1"></a><span class="fu">cat</span>(<span class="fu">sprintf</span>(<span class="st">&quot;Observaciones ambiguas en harvest_year: %d</span><span class="sc">\n</span><span class="st">&quot;</span>, n_ambiguos_hy))</span></code></pre></div>
+<pre><code>## Observaciones ambiguas en harvest_year: 64</code></pre>
 <div class="sourceCode" id="cb26"><pre class="sourceCode r"><code class="sourceCode r"><span id="cb26-1"><a href="#cb26-1" tabindex="-1"></a><span class="fu">cat</span>(<span class="fu">sprintf</span>(<span class="st">&quot;  · NaN originales en harvest_year:        %d</span><span class="sc">\n</span><span class="st">&quot;</span>, n_na_originales))</span></code></pre></div>
 <pre><code>##   · NaN originales en harvest_year:        47</code></pre>
-<div class="sourceCode" id="cb28"><pre class="sourceCode r"><code class="sourceCode r"><span id="cb28-1"><a href="#cb28-1" tabindex="-1"></a><span class="fu">cat</span>(<span class="fu">sprintf</span>(<span class="st">&quot;  · Valores sin separador divisible:        %d</span><span class="sc">\n</span><span class="st">&quot;</span>, n_sin_separador))</span></code></pre></div>
-<pre><code>##   · Valores sin separador divisible:        1149</code></pre>
-<div class="sourceCode" id="cb30"><pre class="sourceCode r"><code class="sourceCode r"><span id="cb30-1"><a href="#cb30-1" tabindex="-1"></a><span class="fu">cat</span>(<span class="st">&quot;</span><span class="sc">\n</span><span class="st">Valores únicos sin separador (no NA):</span><span class="sc">\n</span><span class="st">&quot;</span>)</span></code></pre></div>
+<div class="sourceCode" id="cb28"><pre class="sourceCode r"><code class="sourceCode r"><span id="cb28-1"><a href="#cb28-1" tabindex="-1"></a><span class="fu">cat</span>(<span class="fu">sprintf</span>(<span class="st">&quot;  · Sin año extraíble (valor presente):    %d</span><span class="sc">\n</span><span class="st">&quot;</span>, n_sin_anio))</span></code></pre></div>
+<pre><code>##   · Sin año extraíble (valor presente):    17</code></pre>
+<div class="sourceCode" id="cb30"><pre class="sourceCode r"><code class="sourceCode r"><span id="cb30-1"><a href="#cb30-1" tabindex="-1"></a><span class="fu">cat</span>(<span class="st">&quot;</span><span class="sc">\n</span><span class="st">Valores únicos sin año extraíble (no NA):</span><span class="sc">\n</span><span class="st">&quot;</span>)</span></code></pre></div>
 <pre><code>## 
-## Valores únicos sin separador (no NA):</code></pre>
+## Valores únicos sin año extraíble (no NA):</code></pre>
 <div class="sourceCode" id="cb32"><pre class="sourceCode r"><code class="sourceCode r"><span id="cb32-1"><a href="#cb32-1" tabindex="-1"></a>datos<span class="sc">$</span>harvest_year[<span class="fu">is.na</span>(datos<span class="sc">$</span>harvest_anio) <span class="sc">&amp;</span> <span class="sc">!</span><span class="fu">is.na</span>(datos<span class="sc">$</span>harvest_year)] <span class="sc">|&gt;</span></span>
 <span id="cb32-2"><a href="#cb32-2" tabindex="-1"></a>  <span class="fu">unique</span>() <span class="sc">|&gt;</span></span>
 <span id="cb32-3"><a href="#cb32-3" tabindex="-1"></a>  <span class="fu">sort</span>() <span class="sc">|&gt;</span></span>
 <span id="cb32-4"><a href="#cb32-4" tabindex="-1"></a>  <span class="fu">print</span>()</span></code></pre></div>
-<pre><code>##  [1] &quot;2010&quot;                     &quot;2011&quot;                    
-##  [3] &quot;2012&quot;                     &quot;2013&quot;                    
-##  [5] &quot;2014&quot;                     &quot;2015&quot;                    
-##  [7] &quot;2016&quot;                     &quot;2017&quot;                    
-##  [9] &quot;2018&quot;                     &quot;23 July 2010&quot;            
-## [11] &quot;4T72010&quot;                  &quot;Abril - Julio&quot;           
-## [13] &quot;August to December&quot;       &quot;December 2009-March 2010&quot;
-## [15] &quot;Fall 2009&quot;                &quot;January 2011&quot;            
-## [17] &quot;January Through April&quot;    &quot;March 2010&quot;              
-## [19] &quot;May-August&quot;               &quot;Mayo a Julio&quot;            
-## [21] &quot;mmm&quot;                      &quot;Sept 2009 - April 2010&quot;  
-## [23] &quot;Spring 2011 in Colombia.&quot; &quot;TEST&quot;</code></pre>
+<pre><code>##  [1] &quot;08/09 crop&quot;            &quot;4T/10&quot;                 &quot;4T72010&quot;              
+##  [4] &quot;Abril - Julio&quot;         &quot;August to December&quot;    &quot;January Through April&quot;
+##  [7] &quot;May-August&quot;            &quot;Mayo a Julio&quot;          &quot;mmm&quot;                  
+## [10] &quot;TEST&quot;</code></pre>
 <div class="sourceCode" id="cb34"><pre class="sourceCode r"><code class="sourceCode r"><span id="cb34-1"><a href="#cb34-1" tabindex="-1"></a><span class="fu">cat</span>(<span class="st">&quot;</span><span class="sc">\n</span><span class="st">Muestra de las nuevas columnas:</span><span class="sc">\n</span><span class="st">&quot;</span>)</span></code></pre></div>
 <pre><code>## 
 ## Muestra de las nuevas columnas:</code></pre>
@@ -2041,16 +2045,16 @@ partes.</li>
 <pre><code>## # A tibble: 10 × 3
 ##    harvest_year harvest_mes harvest_anio
 ##    &lt;chr&gt;        &lt;chr&gt;       &lt;chr&gt;       
-##  1 2014         2014        &lt;NA&gt;        
-##  2 2014         2014        &lt;NA&gt;        
+##  1 2014         &lt;NA&gt;        2014        
+##  2 2014         &lt;NA&gt;        2014        
 ##  3 &lt;NA&gt;         &lt;NA&gt;        &lt;NA&gt;        
-##  4 2014         2014        &lt;NA&gt;        
-##  5 2014         2014        &lt;NA&gt;        
-##  6 2013         2013        &lt;NA&gt;        
-##  7 2012         2012        &lt;NA&gt;        
-##  8 March 2010   March 2010  &lt;NA&gt;        
-##  9 March 2010   March 2010  &lt;NA&gt;        
-## 10 2014         2014        &lt;NA&gt;</code></pre>
+##  4 2014         &lt;NA&gt;        2014        
+##  5 2014         &lt;NA&gt;        2014        
+##  6 2013         &lt;NA&gt;        2013        
+##  7 2012         &lt;NA&gt;        2012        
+##  8 March 2010   March       2010        
+##  9 March 2010   March       2010        
+## 10 2014         &lt;NA&gt;        2014</code></pre>
 <hr />
 </div>
 <div id="actividad-6-visualización-de-total_cup_points-acidity-y-color2" class="section level2">

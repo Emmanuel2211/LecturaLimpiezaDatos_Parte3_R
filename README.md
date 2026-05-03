@@ -235,43 +235,52 @@ datos |>
 
 ## Actividad 5: Crear `harvest_mes` y `harvest_anio`
 
+La columna `harvest_year` es muy heterogénea: contiene años simples (`"2016"`), rangos (`"2016/2017"`), mes + año (`"March 2010"`), rangos de meses (`"August to December"`), temporadas (`"Fall 2009"`) y valores malformados (`"4T72010"`, `"TEST"`). Se usan **dos regex independientes** en lugar de un split, para extraer cada componente por separado.
+
+```r
+patron_anio <- "\\b(?:19|20)\\d{2}\\b"
+```
+- Extrae años de 4 dígitos con prefijo `19` o `20`. `\\b` es un **límite de palabra** que evita capturas parciales dentro de cadenas más largas.
+- `(?:...)` es un **grupo no-capturante**: agrupa sin crear una referencia hacia atrás.
+
+```r
+patron_mes  <- paste0(
+  "\\b(?:January|February|...|Spring|Summer|Fall|Winter)\\b"
+)
+```
+- **`paste0(...)`**: concatena cadenas sin separador. Se usa para dividir el patrón largo en varias líneas sin perder legibilidad.
+- El patrón cubre nombres de mes completos y abreviados en inglés y español, más temporadas.
+
 ```r
 datos <- datos |>
   mutate(
-    partes_hy    = str_split(harvest_year, "\\s*/\\s*|\\s*-\\s*(?=[0-9])", n = 2),
+    harvest_anio = map_chr(
+      str_extract_all(harvest_year, patron_anio),
+      ~ { v <- .x[!is.na(.x)]; if (length(v) == 0) NA_character_ else tail(v, 1) }
+    ),
 ```
-- **`stringr::str_split(string, pattern, n)`**: divide cada cadena usando el patrón como separador, en máximo `n` partes. El resultado es una **lista** (list-column en el tibble), donde cada elemento es un vector de character.
-- **Patrón `\\s*/\\s*|\\s*-\\s*(?=[0-9])`**:
-  - `\\s*/\\s*` = barra con espacios opcionales.
-  - `|` = alternancia (OR).
-  - `\\s*-\\s*(?=[0-9])` = guión con espacios opcionales, seguido de un dígito (lookahead positivo `(?=...)` verifica sin consumir el carácter).
+- **`stringr::str_extract_all(string, pattern)`**: extrae **todas** las coincidencias del patrón en cada elemento, devolviendo una **lista** de vectores de character (uno por fila). Cuando el valor de entrada es `NA`, devuelve `list(NA_character_)`.
+- **`purrr::map_chr(lista, funcion)`**: aplica la función a cada elemento de la lista y retorna un **vector de character** con tipo garantizado.
+- **`~ { v <- .x[!is.na(.x)]; if (length(v) == 0) NA_character_ else tail(v, 1) }`**: fórmula lambda de purrr con bloque de expresiones `{ }`.
+  - `.x[!is.na(.x)]`: descarta el `NA_character_` que devuelve `str_extract_all` cuando el input es `NA`.
+  - `tail(v, 1)`: toma el **último** año encontrado, lo que maneja correctamente rangos como `"2016/2017"` (devuelve `"2017"`).
+  - Si no queda ningún año, retorna `NA_character_`.
 
 ```r
-    harvest_mes  = map_chr(partes_hy, ~ str_trim(.x[1])),
+    harvest_mes = str_extract(harvest_year, regex(patron_mes, ignore_case = TRUE))
 ```
-- **`purrr::map_chr(lista, funcion)`**: aplica la función a cada elemento de la lista y retorna un **vector de character**. Es como `sapply` pero con tipo garantizado.
-- **`~ str_trim(.x[1])`**: fórmula lambda de purrr. El `~` inicia la fórmula; `.x` representa el elemento actual de la lista. `.x[1]` accede al primer elemento del vector (la primera parte del split).
-
-```r
-    harvest_anio = map_chr(partes_hy, ~ if (length(.x) >= 2) str_trim(.x[2]) else NA_character_)
-```
-- Si el vector tiene 2 o más elementos (`length(.x) >= 2`), retorna el segundo elemento (la segunda parte). Si solo tiene 1 (sin separador) o es `NA`, retorna `NA_character_`.
-
-```r
-  ) |>
-  select(-partes_hy)
-```
-- **`select(-columna)`**: el signo `-` en `select()` **elimina** la columna indicada. Se usa para limpiar la columna auxiliar `partes_hy` que ya no se necesita.
+- **`stringr::str_extract(string, pattern)`**: extrae la **primera** coincidencia del patrón. Retorna `NA` si no hay coincidencia.
+- **`stringr::regex(pattern, ignore_case = TRUE)`**: envuelve el patrón para pasar opciones adicionales al motor regex. `ignore_case = TRUE` hace la búsqueda insensible a mayúsculas/minúsculas (equivalente al flag `(?i)`).
 
 ```r
 n_ambiguos_hy   <- datos$harvest_anio |> is.na() |> sum()
 n_na_originales <- datos$harvest_year |> is.na() |> sum()
-n_sin_separador <- (is.na(datos$harvest_anio) & !is.na(datos$harvest_year)) |> sum()
+n_sin_anio      <- (is.na(datos$harvest_anio) & !is.na(datos$harvest_year)) |> sum()
 ```
 - Tres conteos:
-  1. Total de ambiguos (incluyendo originalmente NA).
-  2. Solo los NA originales en `harvest_year`.
-  3. Valores presentes en `harvest_year` pero que no pudieron dividirse (sin separador).
+  1. Total de ambiguos (incluyendo `NA` originales en `harvest_year`).
+  2. Solo los `NA` originales en `harvest_year`.
+  3. Valores presentes en `harvest_year` donde no fue posible extraer un año (sin coincidencia para `patron_anio`).
 
 ```r
 datos$harvest_year[is.na(datos$harvest_anio) & !is.na(datos$harvest_year)] |>
@@ -280,7 +289,7 @@ datos$harvest_year[is.na(datos$harvest_anio) & !is.na(datos$harvest_year)] |>
   print()
 ```
 - **`sort()`**: ordena un vector en orden creciente (alfabético para character).
-- La cadena de pipes extrae, deduplica, ordena e imprime los valores problemáticos de `harvest_year`.
+- La cadena de pipes extrae, deduplica, ordena e imprime los valores de `harvest_year` que no contienen un año extraíble.
 
 ---
 

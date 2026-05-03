@@ -215,33 +215,43 @@ datos |>
 
 **Procedimiento:**
 
-La columna `harvest_year` es muy heterogénea: contiene rangos de años (`"2016/2017"`, `"2009-2010"`), trimestres (`"4T/2010"`), años simples (`"2016"`) y formatos no estándar (`"23 July 2010"`, `"4T72010"`). Las funciones clave son:
+La columna `harvest_year` presenta formatos muy heterogéneos: años simples (`"2016"`), rangos de años (`"2016/2017"`), mes + año (`"March 2010"`), rangos de meses (`"August to December"`), valores con temporada (`"Fall 2009"`) y valores malformados (`"4T72010"`, `"TEST"`). Para separar correctamente el mes del año se utilizaron **dos expresiones regulares independientes** en lugar de un simple `split`:
 
-- **`stringr::str_split(string, pattern, n)`**: divide cada elemento de `string` en un máximo de `n` partes usando el patrón regex como separador. El resultado es una **lista** donde cada elemento es un vector de carácter. El patrón `"\\s*/\\s*|\\s*-\\s*(?=[0-9])"` usa el operador alternancia `|` para dividir en `"/"` o en `"-"` entre dígitos (lookahead `(?=[0-9])` evita separar en guiones de palabras compuestas).
-- **`purrr::map_chr(list, function)`**: aplica una función a cada elemento de una lista y devuelve un vector de tipo `character`. Es el equivalente vectorizado de `sapply(..., character)` con mayor control de tipos.
-- Se considera **ambigua** cualquier fila donde `harvest_anio` resulte `NA`, lo que indica que no se encontró un separador y el valor no puede dividirse en dos partes.
+- `harvest_anio`: extrae el **último año de 4 dígitos** (patrón `19xx` o `20xx`) encontrado en el texto, usando `stringr::str_extract_all()` + `purrr::map_chr()` para tomar el último elemento del vector de coincidencias.
+- `harvest_mes`: extrae el **primer nombre de mes** (inglés o español) o temporada encontrado en el texto, usando `stringr::str_extract()` con `regex(..., ignore_case = TRUE)`.
+
+Ambas columnas reciben `NA` cuando su respectivo patrón no encuentra coincidencia. Se considera **ambigua** cualquier fila donde no es posible extraer el año.
 
 **Resultados:**
 
-La principal fuente de ambigüedad son los años simples (`"2010"`, ..., `"2018"`), los valores malformados (`"4T72010"`) y las fechas completas (`"23 July 2010"`).
+Con este enfoque, valores como `"2014"` quedan correctamente como `harvest_mes=NA` y `harvest_anio="2014"`, y valores como `"March 2010"` quedan como `harvest_mes="March"` y `harvest_anio="2010"`. Las observaciones ambiguas se reducen a los casos donde genuinamente no hay año: `NA` originales, rangos de meses sin año (`"Abril - Julio"`, `"May-August"`) y valores malformados (`"TEST"`, `"mmm"`).
 
 ```{r actividad5}
+patron_anio <- "\\b(?:19|20)\\d{2}\\b"
+patron_mes  <- paste0(
+  "\\b(?:January|February|March|April|May|June|July|August|September|October|November|December",
+  "|Jan|Feb|Mar|Apr|Jun|Jul|Aug|Sep|Sept|Oct|Nov|Dec",
+  "|Enero|Febrero|Marzo|Abril|Mayo|Junio|Julio|Agosto|Septiembre|Octubre|Noviembre|Diciembre",
+  "|Spring|Summer|Fall|Winter)\\b"
+)
+
 datos <- datos |>
   mutate(
-    partes_hy    = str_split(harvest_year, "\\s*/\\s*|\\s*-\\s*(?=[0-9])", n = 2),
-    harvest_mes  = map_chr(partes_hy, ~ str_trim(.x[1])),
-    harvest_anio = map_chr(partes_hy, ~ if (length(.x) >= 2) str_trim(.x[2]) else NA_character_)
-  ) |>
-  select(-partes_hy)
+    harvest_anio = map_chr(
+      str_extract_all(harvest_year, patron_anio),
+      ~ { v <- .x[!is.na(.x)]; if (length(v) == 0) NA_character_ else tail(v, 1) }
+    ),
+    harvest_mes = str_extract(harvest_year, regex(patron_mes, ignore_case = TRUE))
+  )
 
 n_ambiguos_hy   <- datos$harvest_anio |> is.na() |> sum()
 n_na_originales <- datos$harvest_year |> is.na() |> sum()
-n_sin_separador <- (is.na(datos$harvest_anio) & !is.na(datos$harvest_year)) |> sum()
+n_sin_anio      <- (is.na(datos$harvest_anio) & !is.na(datos$harvest_year)) |> sum()
 
 cat(sprintf("Observaciones ambiguas en harvest_year: %d\n", n_ambiguos_hy))
 cat(sprintf("  · NaN originales en harvest_year:        %d\n", n_na_originales))
-cat(sprintf("  · Valores sin separador divisible:        %d\n", n_sin_separador))
-cat("\nValores únicos sin separador (no NA):\n")
+cat(sprintf("  · Sin año extraíble (valor presente):    %d\n", n_sin_anio))
+cat("\nValores únicos sin año extraíble (no NA):\n")
 datos$harvest_year[is.na(datos$harvest_anio) & !is.na(datos$harvest_year)] |>
   unique() |>
   sort() |>
