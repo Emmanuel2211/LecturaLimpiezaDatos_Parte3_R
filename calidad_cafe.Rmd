@@ -26,6 +26,7 @@ knitr::opts_chunk$set(
 ```{r librerias}
 library(tidyverse)   
 library(lubridate)
+library(skimr)
 ```
 
 ```{r carga_datos}
@@ -36,18 +37,6 @@ cat(sprintf("Dimensiones del dataset: %d filas × %d columnas\n", nrow(datos), n
 ---
 
 ## Actividad 0: Análisis de valores faltantes del objeto `datos`
-
-**Procedimiento:**
-
-Se utilizó `readr::read_csv()` para cargar el dataset, función del paquete `readr` (parte de `tidyverse`) que detecta automáticamente los tipos de columna y retorna un `tibble`. Para el análisis de valores faltantes, las funciones clave son:
-
-- **`is.na(datos)`**: retorna una matriz lógica (`TRUE`/`FALSE`) del mismo tamaño que `datos`, donde `TRUE` indica un valor faltante.
-- **`colSums(is.na(datos))`**: suma por columna la matriz lógica anterior; como `TRUE` equivale a 1 y `FALSE` a 0, el resultado es el conteo de `NA` por variable.
-- **`dplyr::filter()`**: conserva únicamente las filas que cumplen una condición — aquí, columnas con al menos un valor faltante.
-- **`dplyr::arrange(desc(...))`**: ordena el data frame de mayor a menor según la columna indicada.
-- **`round()`**: redondea el porcentaje a dos decimales.
-
-**Resultados:**
 
 El dataset contiene **1,339 filas y 43 columnas**. De ellas, **19 presentan valores faltantes**. La columna más afectada es `lot_number` (79.39 %), seguida de `farm_name` (26.81 %) y `mill` (23.75 %). Columnas relevantes para las actividades siguientes como `color` (20.16 %), `processing_method` (12.70 %) y `harvest_year` (3.51 %) también tienen ausencias.
 
@@ -71,12 +60,7 @@ resumen_na |> print(row.names = FALSE)
 
 **Procedimiento:**
 
-Se creó la columna `color2` mediante el par de funciones más idiomático de `dplyr` para transformaciones condicionales:
-
-- **`dplyr::mutate()`**: añade o modifica columnas dentro de un `tibble`/`data.frame` sin alterar las demás. Recibe expresiones que se evalúan columna por columna.
-- **`dplyr::case_when()`**: equivalente vectorizado de múltiples `if/else if/else`. Cada línea es una fórmula `condición ~ valor_resultado`; la condición `is.na(color) ~ NA_character_` asigna explícitamente `NA` cuando el color original es faltante (el caso `TRUE ~ NA_character_` actúa como cláusula por defecto).
-- **`is.na()`**: detecta valores `NA` en un vector.
-- **`table(..., useNA = "always")`**: tabla de frecuencias cruzada que incluye los `NA` como categoría, útil para verificar el resultado.
+Se creó la columna `color2` mediante `dplyr::mutate()` combinado con un condicional vectorizado (`dplyr::case_when()`) por medio del uso de `is.na()` que detecta valores `NA` en un vector.
 
 **Resultados:**
 
@@ -90,9 +74,10 @@ datos <- datos |>
       color == "Green"       ~ "#00FF66",
       color == "Bluish-Green"~ "#CCEBC5",
       color == "Blue-Green"  ~ "#BFFFFF",
-      TRUE                   ~ NA_character_
     )
   )
+
+# datos |> count(color,color2)
 
 cat("Distribución de color vs color2:\n")
 print(table(datos$color, datos$color2, useNA = "always"))
@@ -104,23 +89,33 @@ print(table(datos$color, datos$color2, useNA = "always"))
 
 **Procedimiento:**
 
-La columna `bag_weight` almacena cadenas de texto como `"60 kg"` o `"100 lbs"`. Para extraer solo el valor numérico se emplearon funciones del paquete `stringr`:
+Para extraer solo el valor numérico se emplearon funciones del paquete `stringr`:
 
 - **`stringr::str_detect(string, pattern)`**: retorna un vector lógico indicando si cada elemento del vector `string` contiene el patrón regex. Se usa para identificar los valores ambiguos que tienen coma (`","`) indicando múltiples unidades.
 - **`stringr::str_extract(string, pattern)`**: extrae la **primera** subcadena que coincide con el patrón regex. El patrón `"\\d+(\\.\\d+)?"` captura uno o más dígitos seguidos opcionalmente de un punto decimal y más dígitos.
 - **`dplyr::if_else(condition, true, false)`**: versión estricta del `ifelse()` base que respeta los tipos de datos; asigna `NA_real_` (NA de tipo `double`) cuando la condición es verdadera (valor ambiguo).
 - **`as.numeric()`**: convierte la cadena extraída a tipo numérico.
 
-Se consideran **ambiguas** las observaciones con coma en `bag_weight` (p. ej., `"2 kg,lbs"`), ya que indican múltiples unidades sin un valor único determinable.
-
 **Resultados:**
 
 Se encontraron **2 observaciones ambiguas**: `"1 kg,lbs"` y `"2 kg,lbs"`, que reciben `NA` en `bag_weight2`.
 
 ```{r actividad2}
+# datos |> count(bag_weight, sort = TRUE)
+
+datos$bag_weight |>
+  str_extract_all("[^\\d\\s]+") |>   # cualquier cosa que no sea dígito ni espacio
+  unlist() |>
+  unique() |>
+  sort()
+
+datos |>
+  filter(str_detect(bag_weight, "\\d,\\d")) |>   # dígito-coma-dígito
+  count(bag_weight)
+# No utiliza coma en sus decimales
+
 ambiguos_bw <- datos |>
   filter(str_detect(bag_weight, ","))
-
 datos <- datos |>
   mutate(
     bag_weight2 = if_else(
@@ -129,7 +124,6 @@ datos <- datos |>
       bag_weight |> str_extract("\\d+(\\.\\d+)?") |> as.numeric()
     )
   )
-
 vals_ambiguos_bw <- ambiguos_bw$bag_weight |> unique()
 cat(sprintf("Observaciones ambiguas en bag_weight: %d\n", nrow(ambiguos_bw)))
 cat("Valores ambiguos únicos:", vals_ambiguos_bw, "\n")
@@ -141,9 +135,9 @@ cat("Valores ambiguos únicos:", vals_ambiguos_bw, "\n")
 
 **Procedimiento:**
 
-La columna `processing_method` contiene valores como `"Natural / Dry"` o `"Washed / Wet"`, separados por `"/"`. La función central es:
+Con `skimr::skim` observamos las especificaciones del vector `processing_method`. Con `dyplr::count()` obtenemos las frecuencias de cada valor y vemos que solo hay valores separados por `"/"`, `other` y `NA`. Por lo que con ayuda de `stringr::str_match`, 
 
-- **`stringr::str_match(string, pattern)`**: aplica el patrón regex al vector `string` y retorna una **matriz** donde la primera columna es la coincidencia completa y las columnas siguientes son los grupos de captura `(...)`. Devuelve `NA` en filas donde el patrón no coincide, lo que identifica automáticamente los casos ambiguos (valores sin separador o `NA`).
+- **`stringr::str_match()`**: A diferencia de `stringr::str_detect()` aplica el patrón regex al vector `string` y retorna una **matriz** donde la primera columna es la coincidencia completa y las columnas siguientes son los grupos de captura `(...)` del regex. Devuelve `NA` en filas donde el patrón no coincide, lo que identifica automáticamente los casos ambiguos (valores sin separador o `NA`).
 - El patrón `"^(.+?)\\s*/\\s*(.+)$"` usa dos grupos de captura: el primero `(.+?)` captura el texto antes de `"/"` de forma no-greedy, y el segundo `(.+)$` captura todo lo que sigue.
 - **`str_trim()`**: elimina espacios al inicio y al final de las cadenas extraídas.
 - **`sum(is.na(...))`**: cuenta cuántas filas no tuvieron coincidencia con el patrón.
@@ -153,7 +147,14 @@ La columna `processing_method` contiene valores como `"Natural / Dry"` o `"Washe
 El conteo de ambigüedades incluye las 170 filas con `NA` en `processing_method` más las filas con el valor `"Other"` (sin separador `"/"`).
 
 ```{r actividad3}
-pm_match <- str_match(datos$processing_method, "^(.+?)\\s*/\\s*(.+)$")
+# Que onda con el vector processing_method
+skim(datos$processing_method)
+# n_distinct(datos$processing_method) # solo son 6
+datos |> count(processing_method, sort = TRUE)
+
+
+# implementación de las nuevas columnas
+pm_match <- str_match(datos$processing_method, "^(.+?)\\s*/\\s*(.+)$") # non-greedy regex
 
 datos <- datos |>
   mutate(
