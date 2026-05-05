@@ -27,11 +27,13 @@ knitr::opts_chunk$set(
 library(tidyverse)   
 library(lubridate)
 library(skimr)
+library(psych)
+library(janitor)
+library(naniar)
 ```
 
 ```{r carga_datos}
 datos <- readr::read_csv("coffee_ratings.csv")
-cat(sprintf("Dimensiones del dataset: %d filas × %d columnas\n", nrow(datos), ncol(datos)))
 ```
 
 ---
@@ -41,17 +43,27 @@ cat(sprintf("Dimensiones del dataset: %d filas × %d columnas\n", nrow(datos), n
 El dataset contiene **1,339 filas y 43 columnas**. De ellas, **19 presentan valores faltantes**. La columna más afectada es `lot_number` (79.39 %), seguida de `farm_name` (26.81 %) y `mill` (23.75 %). Columnas relevantes para las actividades siguientes como `color` (20.16 %), `processing_method` (12.70 %) y `harvest_year` (3.51 %) también tienen ausencias.
 
 ```{r actividad0}
-na_counts <- datos |> is.na() |> colSums()
+# naniar::vis_miss(datos) # se ve feo
 
-resumen_na <- tibble(
-  columna           = na_counts |> names(),
-  valores_faltantes = na_counts |> as.integer(),
-  porcentaje        = (na_counts / nrow(datos) * 100) |> round(2)
-) |>
-  filter(valores_faltantes > 0) |>
-  arrange(desc(valores_faltantes))
+na_total <- datos |>
+  is.na() |>
+  sum()
 
-resumen_na |> print(row.names = FALSE)
+na_por_columna <- datos |>
+  is.na() |>
+  colSums()
+
+cat("El numero de NAs totales es:", na_total, "\n")
+cat("Tabla de las columnas de Dataframe con NAs y su porcentaje: \n")
+
+na_dataframe <- tibble(
+  columnas = na_por_columna |> names(),
+  na_por_columna,
+  porcentaje = (na_por_columna / nrow(datos) * 100) |> round(1) 
+) |> filter(na_por_columna > 0) |> 
+  arrange(desc(na_por_columna))
+
+na_dataframe |> print()
 ```
 
 ---
@@ -60,27 +72,33 @@ resumen_na |> print(row.names = FALSE)
 
 **Procedimiento:**
 
-Se creó la columna `color2` mediante `dplyr::mutate()` combinado con un condicional vectorizado (`dplyr::case_when()`) por medio del uso de `is.na()` que detecta valores `NA` en un vector.
+Primero, se observo con `unique()` los datos dentro de la columna color. Se creó la columna `color2` mediante `dplyr::mutate()` combinado con un condicional vectorizado (`dplyr::case_when()`) por medio del uso de `is.na()` que detecta valores `NA` en un vector.
 
 **Resultados:**
 
-La columna `color2` asigna correctamente `#00FF66` a los 870 granos "Green", `#CCEBC5` a los 114 "Bluish-Green" y `#BFFFFF` a los 85 "Blue-Green". Los 270 valores faltantes originales de `color` se conservan como `NA`.
+La columna `color2` asigna correctamente `#00FF66` a los 870 granos "Green", `#CCEBC5` a los 114 "Bluish-Green" y `#BFFFFF` a los 85 "Blue-Green". Los 270 valores faltantes originales (ya sea `NA` o `"None"`) de `color` se conservan como `NA`.
+
+```{r actividad1}
+skim(datos$color)
+unique(datos$color)
+n_distinct(datos$color)
+```
 
 ```{r actividad1}
 datos <- datos |>
   mutate(
     color2 = case_when(
-      is.na(color)           ~ NA_character_,
-      color == "Green"       ~ "#00FF66",
-      color == "Bluish-Green"~ "#CCEBC5",
-      color == "Blue-Green"  ~ "#BFFFFF",
+      color == "Green" ~ "#00FF66",
+      color == "Bluish-Green" ~ "#CCEBC5",
+      color == "Blue-Green" ~ "#BFFFFF",
+      color == "None" ~ NA,
+      color |> is.na() ~ NA
     )
   )
 
-# datos |> count(color,color2)
-
+color_results <- datos |> count(color, color2)
 cat("Distribución de color vs color2:\n")
-print(table(datos$color, datos$color2, useNA = "always"))
+print(color_results)
 ```
 
 ---
@@ -101,8 +119,14 @@ Para extraer solo el valor numérico se emplearon funciones del paquete `stringr
 Se encontraron **2 observaciones ambiguas**: `"1 kg,lbs"` y `"2 kg,lbs"`, que reciben `NA` en `bag_weight2`.
 
 ```{r actividad2}
-# datos |> count(bag_weight, sort = TRUE)
+datos |> colnames()
+datos |> count(bag_weight, sort = TRUE)
+datos$bag_weight |> n_distinct()
+datos$bag_weight |> unique()
+```
+Observamos que hay demasiados valores unicos
 
+```{r actividad2}
 datos$bag_weight |>
   str_extract_all("[^\\d\\s]+") |>   # cualquier cosa que no sea dígito ni espacio
   unlist() |>
@@ -135,36 +159,36 @@ cat("Valores ambiguos únicos:", vals_ambiguos_bw, "\n")
 
 **Procedimiento:**
 
-Con `skimr::skim` observamos las especificaciones del vector `processing_method`. Con `dyplr::count()` obtenemos las frecuencias de cada valor y vemos que solo hay valores separados por `"/"`, `other` y `NA`. Por lo que con ayuda de `stringr::str_match`, 
-
-- **`stringr::str_match()`**: A diferencia de `stringr::str_detect()` aplica el patrón regex al vector `string` y retorna una **matriz** donde la primera columna es la coincidencia completa y las columnas siguientes son los grupos de captura `(...)` del regex. Devuelve `NA` en filas donde el patrón no coincide, lo que identifica automáticamente los casos ambiguos (valores sin separador o `NA`).
-- El patrón `"^(.+?)\\s*/\\s*(.+)$"` usa dos grupos de captura: el primero `(.+?)` captura el texto antes de `"/"` de forma no-greedy, y el segundo `(.+)$` captura todo lo que sigue.
-- **`str_trim()`**: elimina espacios al inicio y al final de las cadenas extraídas.
-- **`sum(is.na(...))`**: cuenta cuántas filas no tuvieron coincidencia con el patrón.
+Con `skimr::skim` observamos las especificaciones del vector `processing_method`, en general un vector muy limpio. Con `dyplr::count()` obtenemos las frecuencias de cada valor y vemos que solo hay valores separados por `"/"`, además de los valores `Other` y `NA`. Por lo que con ayuda de `stringr::str_match`, dividimos en una matriz los grupos del regex separados por `"/"`, de esta forma obtenemos una matriz en la cual podemos separa los valores en nuestras nuevas columnas `method1` y `method2`. Para identificar cuales y cuntos fueron los valores ambiguos solo falta con ver que valores de la primera columna de la matriz (`all_methods`) son `NA`.
 
 **Resultados:**
 
 El conteo de ambigüedades incluye las 170 filas con `NA` en `processing_method` más las filas con el valor `"Other"` (sin separador `"/"`).
 
 ```{r actividad3}
-# Que onda con el vector processing_method
+# Que onda con el vector processing_method?
 skim(datos$processing_method)
 # n_distinct(datos$processing_method) # solo son 6
 datos |> count(processing_method, sort = TRUE)
 
-
-# implementación de las nuevas columnas
-pm_match <- str_match(datos$processing_method, "^(.+?)\\s*/\\s*(.+)$") # non-greedy regex
+# implementación de las nuevas columnas 
+all_methods <- str_match(datos$processing_method, "^(.+)\\s/\\s(.+)$")
 
 datos <- datos |>
   mutate(
-    method1 = pm_match[, 2] |> str_trim(),
-    method2 = pm_match[, 3] |> str_trim()
+    method1 = all_methods[, 2] |> str_trim(),
+    method2 = all_methods[, 3] |> str_trim()
   )
 
-n_ambiguos_pm  <- pm_match[, 1] |> is.na() |> sum()
-vals_ambiguos_pm <- datos$processing_method[pm_match[, 1] |> is.na()] |> unique()
-cat(sprintf("Observaciones ambiguas en processing_method: %d\n", n_ambiguos_pm))
+n_ambiguos  <- all_methods[, 1] |>
+  is.na() |>
+  sum()
+
+vals_ambiguos <- datos$processing_method[all_methods[, 1] |> is.na()] |> unique()
+# Ojo, con is.na() devuelve un vector de booleanos, R interpreta ese vector 
+# como índice, devuelve solo los TRUE de processign_method
+
+cat(sprintf("Observaciones ambiguas en processing_method: %d\n", n_ambiguos))
 cat("Valores únicos ambiguos:", vals_ambiguos_pm, "\n")
 ```
 
@@ -189,6 +213,10 @@ La columna `expiration` sigue el formato inglés de fecha ordinal: `"Month DDth,
 El formato de `expiration` es muy consistente en todo el dataset, por lo que se esperan muy pocas o ninguna observación ambigua.
 
 ```{r actividad4}
+# skim(datos$expiration)
+# n_distinct(datos$expiration)
+datos |> count(expiration, sort = TRUE) |> head(8)
+
 exp_match <- str_match(
   datos$expiration,
   "^(\\w+)\\s+(\\d{1,2})(?:st|nd|rd|th),\\s+(\\d{4})$"
