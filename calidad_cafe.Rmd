@@ -24,6 +24,9 @@ knitr::opts_chunk$set(
 ```
 
 ```{r librerias}
+paquetes <- c("tidyverse", "lubridate", "skimr", "psych", "janitor", "naniar")
+install.packages(paquetes)
+
 library(tidyverse)   
 library(lubridate)
 library(skimr)
@@ -96,6 +99,14 @@ datos <- datos |>
     )
   )
 
+# Seria bueno cambiar "None" a tipo NA.
+datos <- datos |>
+  mutate(
+    color = case_when(
+      color == "None" ~ NA
+    )
+  )
+
 color_results <- datos |> count(color, color2)
 cat("Distribución de color vs color2:\n")
 print(color_results)
@@ -121,7 +132,6 @@ Se encontraron **2 observaciones ambiguas**: `"1 kg,lbs"` y `"2 kg,lbs"`, que re
 ```{r actividad2}
 datos |> colnames()
 datos |> count(bag_weight, sort = TRUE)
-datos$bag_weight |> n_distinct()
 datos$bag_weight |> unique()
 ```
 Observamos que hay demasiados valores unicos
@@ -132,12 +142,10 @@ datos$bag_weight |>
   unlist() |>
   unique() |>
   sort()
+```
+Observamos que solo hay comas (,) entre los strings
 
-datos |>
-  filter(str_detect(bag_weight, "\\d,\\d")) |>   # dígito-coma-dígito
-  count(bag_weight)
-# No utiliza coma en sus decimales
-
+```{r actividad2}
 ambiguos_bw <- datos |>
   filter(str_detect(bag_weight, ","))
 datos <- datos |>
