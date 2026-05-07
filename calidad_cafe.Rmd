@@ -24,15 +24,12 @@ knitr::opts_chunk$set(
 ```
 
 ```{r librerias}
-paquetes <- c("tidyverse", "lubridate", "skimr", "psych", "janitor", "naniar")
-install.packages(paquetes)
-
 library(tidyverse)   
 library(lubridate)
 library(skimr)
 library(psych)
 library(janitor)
-library(naniar)
+# library(naniar)
 ```
 
 ```{r carga_datos}
@@ -48,9 +45,7 @@ El dataset contiene **1,339 filas y 43 columnas**. De ellas, **19 presentan valo
 ```{r actividad0}
 # naniar::vis_miss(datos) # se ve feo
 
-na_total <- datos |>
-  is.na() |>
-  sum()
+datos |> dim()
 
 na_por_columna <- datos |>
   is.na() |>
