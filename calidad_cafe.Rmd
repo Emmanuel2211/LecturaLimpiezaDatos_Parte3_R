@@ -191,7 +191,7 @@ vals_ambiguos <- datos$processing_method[all_methods[, 1] |> is.na()] |> unique(
 # como índice, devuelve solo los TRUE de processign_method
 
 cat(sprintf("Observaciones ambiguas en processing_method: %d\n", n_ambiguos))
-cat("Valores únicos ambiguos:", vals_ambiguos_pm, "\n")
+cat("Valores únicos ambiguos:", vals_ambiguos, "\n")
 ```
 
 ---
@@ -200,44 +200,28 @@ cat("Valores únicos ambiguos:", vals_ambiguos_pm, "\n")
 
 **Procedimiento:**
 
-La columna `expiration` sigue el formato inglés de fecha ordinal: `"Month DDth, YYYY"` (p. ej., `"April 3rd, 2016"`). Se utiliza `str_match()` con grupos de captura para extraer los tres componentes en una sola operación:
-
-- **Patrón regex**: `"^(\\w+)\\s+(\\d{1,2})(?:st|nd|rd|th),\\s+(\\d{4})$"`
-  - `(\\w+)` — grupo 1: nombre del mes (una o más letras/dígitos/guión bajo).
-  - `(\\d{1,2})` — grupo 2: día de 1 o 2 dígitos.
-  - `(?:st|nd|rd|th)` — sufijo ordinal sin captura (`(?:...)` es un grupo no-capturante).
-  - `(\\d{4})` — grupo 3: año de exactamente 4 dígitos.
-- **`as.integer()`**: convierte los grupos de día y año (cadenas) a entero.
-- Las filas donde el patrón **no coincide** y `expiration` no es `NA` se consideran **ambiguas**.
 
 **Resultados:**
 
 El formato de `expiration` es muy consistente en todo el dataset, por lo que se esperan muy pocas o ninguna observación ambigua.
 
 ```{r actividad4}
-# skim(datos$expiration)
-# n_distinct(datos$expiration)
-datos |> count(expiration, sort = TRUE) |> head(8)
-
-exp_match <- str_match(
-  datos$expiration,
-  "^(\\w+)\\s+(\\d{1,2})(?:st|nd|rd|th),\\s+(\\d{4})$"
-)
+datos$expiration |> unique()
 
 datos <- datos |>
+  mutate(expiration_onset = datos$expiration |> mdy())
+datos <- datos |>
   mutate(
-    expiration_month = exp_match[, 2],
-    expiration_day   = exp_match[, 3] |> as.integer(),
-    expiration_year  = exp_match[, 4] |> as.integer()
-  )
+    expiration_month = month(expiration_onset),
+    expiration_year = year(expiration_onset),
+    expiration_day = day(expiration_onset)
+    )
 
-n_ambiguos_exp <- (!is.na(datos$expiration) & is.na(exp_match[, 2])) |> sum()
-cat(sprintf("Observaciones ambiguas en expiration: %d\n", n_ambiguos_exp))
-cat("\nMuestra de las nuevas columnas:\n")
-datos |>
-  select(expiration, expiration_day, expiration_month, expiration_year) |>
-  head(8) |>
-  print()
+columnas_expiration = c("expiration", "expiration_day", "expiration_month", "expiration_year")
+df4 <- datos[columnas_expiration]
+
+df4 |> summary()
+df4 |> head()
 ```
 
 ---
