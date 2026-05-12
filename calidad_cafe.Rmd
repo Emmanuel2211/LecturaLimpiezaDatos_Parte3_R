@@ -240,7 +240,7 @@ datos$harvest_year |> skim()
 
 
 ```{r actividad6, fig.width=9, fig.height=6}
-datos$total_cup_points |> class()
+
 
 datos <- datos |>
   mutate(
@@ -250,14 +250,32 @@ datos <- datos |>
 
 datos[c("total_cup_points", "acidity")] |> summary()
 
-plot(datos$total_cup_points, datos$acidity,
-     pch = 19,
-     col = datos$color2
-    )
-legend("topleft",
-       legend = levels(factor(datos$color)),
-       pch = 19,
-       col = c("#BFFFFF", "#CCEBC5", "#00FF66"))
+paleta <- datos |>
+  filter(!is.na(color)) |>
+  distinct(color, color2) |>
+  deframe()
+
+formas <- c(
+  "Green"        = 24,
+  "Bluish-Green" = 22,
+  "Blue-Green"   = 21
+)
+
+datos |>
+  filter(!is.na(color)) |>
+  ggplot(aes(x = total_cup_points, y = acidity, fill = color, shape = color)) +
+  geom_jitter(color = "black", size = 1.1, stroke = 0.15,
+             alpha = 0.5, width = 0.03, height = 0.03) +
+  scale_fill_manual(values = paleta, name = "Color") +
+  scale_shape_manual(values = formas, name = "Color") +
+  guides(
+    fill = guide_legend(override.aes = list(size = 3, alpha = .9)),
+    shape = guide_legend(override.aes = list(size = 3, alpha = .9))
+  ) +
+  xlab(label = "Calificación/Puntos Totales") +
+  ylab(label = "Acidez") +
+  ggtitle(label = "Puntos totales vs. Acides por Color") +
+  theme_minimal()
 
 ```
 
