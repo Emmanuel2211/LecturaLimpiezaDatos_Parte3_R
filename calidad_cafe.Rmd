@@ -51,7 +51,6 @@ na_por_columna <- datos |>
   is.na() |>
   colSums()
 
-cat("El numero de NAs totales es:", na_total, "\n")
 cat("Tabla de las columnas de Dataframe con NAs y su porcentaje: \n")
 
 na_dataframe <- tibble(
@@ -247,52 +246,11 @@ datos |>
 
 **Procedimiento:**
 
-La columna `harvest_year` presenta formatos muy heterogéneos: años simples (`"2016"`), rangos de años (`"2016/2017"`), mes + año (`"March 2010"`), rangos de meses (`"August to December"`), valores con temporada (`"Fall 2009"`) y valores malformados (`"4T72010"`, `"TEST"`). Para separar correctamente el mes del año se utilizaron **dos expresiones regulares independientes** en lugar de un simple `split`:
-
-- `harvest_anio`: extrae el **último año de 4 dígitos** (patrón `19xx` o `20xx`) encontrado en el texto, usando `stringr::str_extract_all()` + `purrr::map_chr()` para tomar el último elemento del vector de coincidencias.
-- `harvest_mes`: extrae el **primer nombre de mes** (inglés o español) o temporada encontrado en el texto, usando `stringr::str_extract()` con `regex(..., ignore_case = TRUE)`.
-
-Ambas columnas reciben `NA` cuando su respectivo patrón no encuentra coincidencia. Se considera **ambigua** cualquier fila donde no es posible extraer el año.
-
 **Resultados:**
 
-Con este enfoque, valores como `"2014"` quedan correctamente como `harvest_mes=NA` y `harvest_anio="2014"`, y valores como `"March 2010"` quedan como `harvest_mes="March"` y `harvest_anio="2010"`. Las observaciones ambiguas se reducen a los casos donde genuinamente no hay año: `NA` originales, rangos de meses sin año (`"Abril - Julio"`, `"May-August"`) y valores malformados (`"TEST"`, `"mmm"`).
-
 ```{r actividad5}
-patron_anio <- "\\b(?:19|20)\\d{2}\\b"
-patron_mes  <- paste0(
-  "\\b(?:January|February|March|April|May|June|July|August|September|October|November|December",
-  "|Jan|Feb|Mar|Apr|Jun|Jul|Aug|Sep|Sept|Oct|Nov|Dec",
-  "|Enero|Febrero|Marzo|Abril|Mayo|Junio|Julio|Agosto|Septiembre|Octubre|Noviembre|Diciembre",
-  "|Spring|Summer|Fall|Winter)\\b"
-)
-
-datos <- datos |>
-  mutate(
-    harvest_anio = map_chr(
-      str_extract_all(harvest_year, patron_anio),
-      ~ { v <- .x[!is.na(.x)]; if (length(v) == 0) NA_character_ else tail(v, 1) }
-    ),
-    harvest_mes = str_extract(harvest_year, regex(patron_mes, ignore_case = TRUE))
-  )
-
-n_ambiguos_hy   <- datos$harvest_anio |> is.na() |> sum()
-n_na_originales <- datos$harvest_year |> is.na() |> sum()
-n_sin_anio      <- (is.na(datos$harvest_anio) & !is.na(datos$harvest_year)) |> sum()
-
-cat(sprintf("Observaciones ambiguas en harvest_year: %d\n", n_ambiguos_hy))
-cat(sprintf("  · NaN originales en harvest_year:        %d\n", n_na_originales))
-cat(sprintf("  · Sin año extraíble (valor presente):    %d\n", n_sin_anio))
-cat("\nValores únicos sin año extraíble (no NA):\n")
-datos$harvest_year[is.na(datos$harvest_anio) & !is.na(datos$harvest_year)] |>
-  unique() |>
-  sort() |>
-  print()
-cat("\nMuestra de las nuevas columnas:\n")
-datos |>
-  select(harvest_year, harvest_mes, harvest_anio) |>
-  head(10) |>
-  print()
+datos$harvest_year |> skim()
+datos$harvest_year |> count()
 ```
 
 ---
@@ -444,17 +402,9 @@ ggplot(df8, aes(x = fecha_exp, y = total_cup_points,
 
 **Procedimiento:**
 
-Se usó el paradigma *tidy data* para transformar las tres columnas de altitud en filas. Las funciones clave son:
-
-- **`tidyr::pivot_longer(cols, names_to, values_to)`**: transforma el data frame de formato ancho (*wide*) a largo (*long*), convirtiendo las columnas indicadas en `cols` en dos columnas: `names_to` (nombre de la variable) y `values_to` (su valor). Esto permite graficar las tres altitudes como una sola variable categórica `tipo_altitud`.
-- **`factor(..., levels = ...)`** / **`forcats::fct_relevel()`**: establece el orden de las categorías del factor `expiration_month` para que el eje horizontal respete el orden cronológico (enero a diciembre) en lugar del orden alfabético.
-- **`ggplot2::facet_wrap(~ variable)`**: divide el gráfico en paneles (facetas) según los valores de `variable`; aquí crea un panel por año de expiración.
-- **`stat_summary(fun = mean, geom = "line")`**: calcula la media de `y` por grupo y la dibuja como línea, sin necesidad de agregar previamente. Más flexible que `geom_line()` directo cuando hay múltiples observaciones por punto x.
-- **`scale_color_brewer(palette = "Dark2")`**: paleta cualitativa con colores bien diferenciables para las tres altitudes.
 
 **Resultados:**
 
-La visualización de dos paneles compara cómo varía la altitud de cultivo por mes de expiración en 2016 y 2017, distinguiendo la altitud mínima, media y máxima.
 
 ```{r actividad9, fig.width=13, fig.height=6}
 month_levels <- c("January","February","March","April","May","June",
@@ -465,42 +415,6 @@ df9 <- datos |>
   filter(
     country_of_origin %in% paises,
     expiration_year %in% c(2016L, 2017L)
-  ) |>
-  drop_na(expiration_month,
-          altitude_low_meters, altitude_mean_meters, altitude_high_meters) |>
-  mutate(
-    expiration_month = factor(expiration_month, levels = month_levels)
-  ) |>
-  pivot_longer(
-    cols      = c(altitude_low_meters, altitude_mean_meters, altitude_high_meters),
-    names_to  = "tipo_altitud",
-    values_to = "altitud_metros"
-  ) |>
-  mutate(
-    tipo_altitud = case_when(
-      tipo_altitud == "altitude_low_meters"  ~ "Altitud Mínima",
-      tipo_altitud == "altitude_mean_meters" ~ "Altitud Media",
-      tipo_altitud == "altitude_high_meters" ~ "Altitud Máxima"
-    )
-  )
-
-ggplot(df9, aes(x = expiration_month, y = altitud_metros,
-                color = tipo_altitud, group = tipo_altitud)) +
-  stat_summary(fun = mean, geom = "line",  linewidth = 1.2) +
-  stat_summary(fun = mean, geom = "point", size = 2.5) +
-  facet_wrap(~ expiration_year, nrow = 1) +
-  scale_color_brewer(palette = "Dark2") +
-  labs(
-    x     = "Mes de Expiración",
-    y     = "Altitud (metros)",
-    title = "Altitud de Cultivo por Mes de Expiración\n(México, Brasil, Colombia y Guatemala)",
-    color = "Tipo de Altitud"
-  ) +
-  theme_bw(base_size = 11) +
-  theme(
-    axis.text.x  = element_text(angle = 45, hjust = 1),
-    plot.title   = element_text(face = "bold", size = 13),
-    strip.text   = element_text(face = "bold", size = 12)
   )
 ```
 
@@ -510,53 +424,12 @@ ggplot(df9, aes(x = expiration_month, y = altitud_metros,
 
 **Procedimiento:**
 
-Se usó exclusivamente `tidyverse` (sin paquetes adicionales). La estrategia combina `pivot_longer()` y `facet_wrap()` para mostrar las tres variables en un mismo canvas:
-
-- **`tidyr::pivot_longer(cols, names_to, values_to)`**: transforma el data frame de formato ancho a largo. Las tres columnas numéricas (`aftertaste`, `acidity`, `body`) se apilan en una sola columna `valor`, y sus nombres pasan a la columna categórica `variable`. Esto permite tratar las tres métricas como facetas de un mismo gráfico.
-- **`dplyr::case_when()`**: renombra los valores de `variable` al español para las etiquetas del gráfico.
-- **`geom_violin(trim = FALSE)`**: dibuja la distribución completa de cada variable para cada especie como una figura simétrica en forma de violín. `trim = FALSE` extiende las colas hasta los valores extremos reales.
-- **`geom_boxplot()`**: superpuesto al violín, muestra la mediana, los cuartiles y los valores atípicos. El argumento `width` controla el ancho del boxplot para que no tape el violín.
-- **`ggplot2::facet_wrap(~ variable, scales = "free_y")`**: divide el canvas en un panel por cada valor de `variable` (uno por métrica). `scales = "free_y"` permite que cada panel tenga su propia escala vertical, ya que las tres variables tienen rangos similares pero distintos.
-- **`scale_fill_brewer(palette = "Set1")`**: aplica una paleta cualitativa distinguible para las especies.
 
 **Resultados:**
 
-Los tres paneles en un mismo canvas permiten comparar simultáneamente cómo difieren *Arabica* y *Robusta* en aftertaste, acidez y cuerpo. *Arabica* concentra sus valores en rangos superiores y con mayor dispersión; *Robusta* muestra distribuciones más compactas y desplazadas hacia valores menores.
 
 ```{r actividad10, fig.width=11, fig.height=6}
 df10 <- datos |>
   select(aftertaste, acidity, body, species) |>
-  drop_na() |>
-  pivot_longer(
-    cols      = c(aftertaste, acidity, body),
-    names_to  = "variable",
-    values_to = "valor"
-  ) |>
-  mutate(
-    variable = case_when(
-      variable == "aftertaste" ~ "Aftertaste",
-      variable == "acidity"    ~ "Acidez",
-      variable == "body"       ~ "Cuerpo"
-    )
-  )
-
-ggplot(df10, aes(x = species, y = valor, fill = species)) +
-  geom_violin(alpha = 0.45, trim = FALSE, linewidth = 0.6) +
-  geom_boxplot(width = 0.15, alpha = 0.85, outlier.size = 0.8,
-               outlier.alpha = 0.5, linewidth = 0.5) +
-  facet_wrap(~ variable, scales = "free_y", nrow = 1) +
-  scale_fill_brewer(palette = "Set1") +
-  labs(
-    x     = "Especie",
-    y     = "Puntuación",
-    title = "Distribución de Aftertaste, Acidez y Cuerpo del Café por Especie",
-    fill  = "Especie"
-  ) +
-  theme_bw(base_size = 12) +
-  theme(
-    plot.title   = element_text(face = "bold", size = 14),
-    strip.text   = element_text(face = "bold", size = 12),
-    axis.text.x  = element_text(angle = 15, hjust = 1),
-    legend.position = "none"
-  )
+  drop_na()
 ```
