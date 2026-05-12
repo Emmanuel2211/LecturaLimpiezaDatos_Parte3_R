@@ -33,7 +33,8 @@ library(janitor)
 ```
 
 ```{r carga_datos}
-datos <- readr::read_csv("coffee_ratings.csv")
+datos <- readr::read_csv("coffee_ratings.csv", 
+                         na = c("", "None", "NA", "NaN", "N/A", "-9999"))
 ```
 
 ---
@@ -90,14 +91,6 @@ datos <- datos |>
       color == "Blue-Green" ~ "#BFFFFF",
       color == "None" ~ NA,
       color |> is.na() ~ NA
-    )
-  )
-
-# Seria bueno cambiar "None" a tipo NA.
-datos <- datos |>
-  mutate(
-    color = case_when(
-      color == "None" ~ NA
     )
   )
 
@@ -203,7 +196,7 @@ cat("Valores únicos ambiguos:", vals_ambiguos, "\n")
 
 **Resultados:**
 
-El formato de `expiration` es muy consistente en todo el dataset, por lo que se esperan muy pocas o ninguna observación ambigua.
+El formato de `expiration` es muy consistente en todo el dataset, por lo que no se encuentra ninguna observación ambigua.
 
 ```{r actividad4}
 datos$expiration |> unique()
@@ -234,7 +227,6 @@ df4 |> head()
 
 ```{r actividad5}
 datos$harvest_year |> skim()
-datos$harvest_year |> count()
 ```
 
 ---
@@ -243,40 +235,30 @@ datos$harvest_year |> count()
 
 **Procedimiento:**
 
-Se elaboró un diagrama de dispersión con `ggplot2`. Las funciones y capas clave son:
-
-- **`ggplot(data, aes(...))`**: inicializa el gráfico definiendo los mapeos estéticos globales (`x`, `y`, `color`). La función `aes()` mapea columnas del data frame a propiedades visuales.
-- **`geom_point()`**: capa de puntos para el diagrama de dispersión. Parámetros usados: `alpha` (transparencia), `size` (tamaño), `shape` (forma).
-- **`scale_color_identity(guide = "legend", ...)`**: le indica a ggplot2 que los valores de la columna `color2` **son colores literales** (códigos hex), no categorías a mapear a una paleta. Sin esta escala, ggplot no sabría interpretar `"#00FF66"` como un color. El parámetro `guide = "legend"` activa la leyenda; `breaks` y `labels` definen qué valores mostrar y con qué etiquetas.
-- **`drop_na()`**: elimina filas con `NA` en las columnas indicadas.
-- **`labs()`**: define títulos de ejes, título principal y título de leyenda.
-- **`theme_bw()`**: tema de fondo blanco con cuadrícula gris, adecuado para publicaciones.
 
 **Resultados:**
 
-El gráfico muestra los tres colores literales del grano. Se aprecia una correlación positiva moderada entre acidez y puntuación total, con poca diferencia entre colores.
 
 ```{r actividad6, fig.width=9, fig.height=6}
-df6 <- datos |> drop_na(color2, total_cup_points, acidity)
+datos$total_cup_points |> class()
 
-ggplot(df6, aes(x = acidity, y = total_cup_points, color = color2)) +
-  geom_point(alpha = 0.75, size = 2.5, shape = 16) +
-  scale_color_identity(
-    guide  = "legend",
-    breaks = c("#00FF66", "#CCEBC5", "#BFFFFF"),
-    labels = c("Green", "Bluish-Green", "Blue-Green")
-  ) +
-  labs(
-    x     = "Acidez (Acidity)",
-    y     = "Puntuación Total (Total Cup Points)",
-    title = "Relación entre Acidez y Puntuación Total del Café\nsegún Color del Grano",
-    color = "Color del grano"
-  ) +
-  theme_bw(base_size = 13) +
-  theme(
-    plot.title   = element_text(face = "bold", size = 14),
-    legend.position = "right"
+datos <- datos |>
+  mutate(
+    total_cup_points = na_if(total_cup_points, 0),
+    acidity = na_if(acidity, 0),
   )
+
+datos[c("total_cup_points", "acidity")] |> summary()
+
+plot(datos$total_cup_points, datos$acidity,
+     pch = 19,
+     col = datos$color2
+    )
+legend("topleft",
+       legend = levels(factor(datos$color)),
+       pch = 19,
+       col = c("#BFFFFF", "#CCEBC5", "#00FF66"))
+
 ```
 
 ---
