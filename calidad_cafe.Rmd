@@ -29,12 +29,14 @@ library(lubridate)
 library(skimr)
 library(psych)
 library(janitor)
-# library(naniar)
+library(zoo)
 ```
 
 ```{r carga_datos}
 datos <- readr::read_csv("coffee_ratings.csv", 
                          na = c("", "None", "NA", "NaN", "N/A", "-9999"))
+
+datos |> skim()
 ```
 
 ---
@@ -117,8 +119,6 @@ Para extraer solo el valor numérico se emplearon funciones del paquete `stringr
 Se encontraron **2 observaciones ambiguas**: `"1 kg,lbs"` y `"2 kg,lbs"`, que reciben `NA` en `bag_weight2`.
 
 ```{r actividad2}
-datos |> colnames()
-datos |> count(bag_weight, sort = TRUE)
 datos$bag_weight |> unique()
 ```
 Observamos que hay demasiados valores unicos
@@ -129,24 +129,38 @@ datos$bag_weight |>
   unlist() |>
   unique() |>
   sort()
+
+grepl("kg,lbs", datos$bag_weight) |>
+  sum()
 ```
-Observamos que solo hay comas (,) entre los strings
+Observamos que existen dos valores ambiguous `"kg,lbs"`
 
 ```{r actividad2}
-ambiguos_bw <- datos |>
-  filter(str_detect(bag_weight, ","))
+
+numbers <- gregexpr("[0-9]+", datos$bag_weight)
+result <- regmatches(datos$bag_weight, numbers)
+
+datos <- datos |> mutate(
+  bag_weight2 = as.numeric(unlist(result))
+)
+
 datos <- datos |>
   mutate(
-    bag_weight2 = if_else(
-      str_detect(bag_weight, ","),
-      NA_real_,
-      bag_weight |> str_extract("\\d+(\\.\\d+)?") |> as.numeric()
+    bag_weight2 = case_when(
+      grepl(",", bag_weight) == TRUE ~ NA,
+      grepl("lbs", bag_weight) == TRUE ~ (bag_weight2 / 2.205) |> round(3),
+      TRUE ~ bag_weight2
     )
   )
-vals_ambiguos_bw <- ambiguos_bw$bag_weight |> unique()
-cat(sprintf("Observaciones ambiguas en bag_weight: %d\n", nrow(ambiguos_bw)))
-cat("Valores ambiguos únicos:", vals_ambiguos_bw, "\n")
+
+datos <- datos |>
+  mutate(
+    bag_weight2 = ifelse(bag_weight2 < 300, bag_weight2, NA)
+  )
+
+datos$bag_weight2 |> summary()
 ```
+
 
 ---
 
@@ -264,13 +278,13 @@ formas <- c(
 datos |>
   filter(!is.na(color)) |>
   ggplot(aes(x = total_cup_points, y = acidity, fill = color, shape = color)) +
-  geom_jitter(color = "black", size = 1.1, stroke = 0.15,
+  geom_jitter(color = "black", size = 1.3, stroke = 0.15,
              alpha = 0.5, width = 0.03, height = 0.03) +
   scale_fill_manual(values = paleta, name = "Color") +
   scale_shape_manual(values = formas, name = "Color") +
   guides(
-    fill = guide_legend(override.aes = list(size = 3, alpha = .9)),
-    shape = guide_legend(override.aes = list(size = 3, alpha = .9))
+    fill = guide_legend(override.aes = list(size = 4, alpha = .9)),
+    shape = guide_legend(override.aes = list(size = 4, alpha = .9))
   ) +
   xlab(label = "Calificación/Puntos Totales") +
   ylab(label = "Acidez") +
@@ -285,99 +299,49 @@ datos |>
 
 **Procedimiento:**
 
-Se elaboró un gráfico de densidad (estimación por núcleo, KDE) con las siguientes capas y funciones:
-
-- **`geom_density()`**: capa que estima y dibuja la función de densidad de probabilidad de la variable continua. Parámetros: `fill` (color de relleno del área bajo la curva), `alpha` (transparencia del relleno), `linewidth` (grosor de la línea de la curva).
-- **`scale_fill_brewer()` / `scale_color_brewer()`**: aplican paletas de color de ColorBrewer (diseñadas para ser perceptualmente distinguibles). Cuando se usan `fill` y `color` a la vez, ambas escalas deben especificarse para que la leyenda sea única.
-- **`dplyr::filter(bag_weight2 < 2000)`**: excluye valores atípicos extremos que distorsionarían la escala horizontal.
-- **`drop_na()`**: elimina filas con `NA` en las columnas de interés.
 
 **Resultados:**
 
-La especie *Arabica* (la más frecuente en el dataset) presenta una distribución concentrada en sacos de menor peso, mientras que *Robusta* muestra un patrón diferente con una dispersión menor.
 
 ```{r actividad7}
-df7 <- datos |>
-  drop_na(bag_weight2, species) |>
-  filter(bag_weight2 < 2000)
-
-ggplot(df7, aes(x = bag_weight2, fill = species, color = species)) +
-  geom_density(alpha = 0.35, linewidth = 1.2) +
-  scale_fill_brewer(palette = "Set1") +
-  scale_color_brewer(palette = "Set1") +
-  labs(
-    x     = "Peso del Saco (kg)",
-    y     = "Densidad",
-    title = "Distribución del Peso de los Sacos de Café por Especie",
-    fill  = "Especie",
-    color = "Especie"
-  ) +
-  theme_bw(base_size = 13) +
-  theme(plot.title = element_text(face = "bold", size = 14))
+ggplot(datos, aes(x = bag_weight2, colour = species, fill = species)) +
+  geom_density(alpha = 0.5, color = NA) +
+  guides(fill = guide_legend(title = "Especies")) +
+  xlab(label = "Peso de la Bolsa") +
+  ylab(label = "Densidad") +
+  ggtitle(label = "Densidad del peso de la bolsa de café por especie")
+  theme_minimal()
 ```
 
 ---
 
-## Actividad 8: Fecha de expiración vs `total_cup_points` (México, Brasil, Colombia, Guatemala)
+## Actividad 8: Fecha de expiración vs `total_cup_points` (México, Brazil, Colombia, Guatemala)
 
 **Procedimiento:**
 
-Se construyó una serie de tiempo para los cuatro países. Las funciones importantes son:
-
-- **`dplyr::filter(country_of_origin %in% paises)`**: el operador `%in%` selecciona filas cuyo valor pertenece al vector `paises`, equivalente a múltiples condiciones `==` unidas por `|`.
-- **`setNames(1:12, month_levels)`**: crea un vector nombrado que mapea nombres de mes (carácter) a su número ordinal; se usa para construir la fecha.
-- **`lubridate::ymd()`**: convierte cadenas en formato `"YYYY-MM-DD"` a objetos `Date`. Es más robusto que `as.Date()` para formatos no ambiguos.
-- **`paste(..., sep = "-")`**: concatena los componentes año, mes, día en la cadena esperada por `ymd()`.
-- **`dplyr::group_by()` + `summarise()`**: agrupa las filas por fecha y país, y calcula la media de `total_cup_points` por grupo.
-- **`geom_line()` + `geom_point()`**: capas para trazar la serie de tiempo con marcadores en cada observación.
-- **`scale_x_date(date_labels, date_breaks)`**: formatea el eje temporal con etiquetas de fecha (`%b %Y` = "Abr 2016") y define el intervalo entre marcas.
 
 **Resultados:**
 
-El gráfico muestra la puntuación media por fecha de expiración para cada país, revelando tendencias y disponibilidad temporal diferenciada por región.
 
 ```{r actividad8, fig.width=12, fig.height=6}
-paises <- c("Mexico", "Brazil", "Colombia", "Guatemala")
+countries = c("Mexico", "Brazil", "Colombia", "Guatemala")
 
-month_levels <- c("January","February","March","April","May","June",
-                  "July","August","September","October","November","December")
-month_num <- setNames(1:12, month_levels)
+selected_countries <- datos |>
+  filter(country_of_origin %in% countries)
 
-palette_paises <- c(
-  "Mexico"    = "#E63946",
-  "Brazil"    = "#457B9D",
-  "Colombia"  = "#2A9D8F",
-  "Guatemala" = "#E9C46A"
-)
-
-df8 <- datos |>
-  filter(country_of_origin %in% paises) |>
-  drop_na(expiration_year, expiration_month, total_cup_points) |>
-  mutate(
-    mes_num   = month_num[expiration_month],
-    fecha_exp = paste(expiration_year, mes_num, "01", sep = "-") |> ymd()
-  ) |>
-  group_by(fecha_exp, country_of_origin) |>
-  summarise(total_cup_points = mean(total_cup_points, na.rm = TRUE), .groups = "drop") |>
-  arrange(fecha_exp)
-
-ggplot(df8, aes(x = fecha_exp, y = total_cup_points,
-                color = country_of_origin, group = country_of_origin)) +
-  geom_line(linewidth = 1.2) +
-  geom_point(size = 3) +
-  scale_color_manual(values = palette_paises) +
-  scale_x_date(date_labels = "%b %Y", date_breaks = "3 months") +
+ggplot(selected_countries, aes(x = expiration_onset, y = total_cup_points,
+  colour = country_of_origin, group = country_of_origin)) +
+  geom_line(alpha = 0.7) +
+  geom_point(size = 0.7) +
+  scale_x_date(date_breaks = "3 month", date_labels = "%b %Y") +
   labs(
-    x     = "Fecha de Expiración (Mes/Año)",
-    y     = "Puntuación Total Promedio",
-    title = "Puntuación Total del Café por Fecha de Expiración\n(México, Brasil, Colombia y Guatemala)",
-    color = "País de Origen"
-  ) +
-  theme_bw(base_size = 12) +
-  theme(
-    axis.text.x  = element_text(angle = 45, hjust = 1),
-    plot.title   = element_text(face = "bold", size = 14)
-  )
+    title = "Puntuación total de cada Mes/Año por País",
+    x = "Mes/Año",
+    y = "Puntuación Total",
+    colour = "País de Origen"
+  ) + 
+  theme_minimal() +
+  theme(axis.text.x = element_text(angle = 90, vjust = 0.5, hjust = 1))
 ```
 
 ---
@@ -391,15 +355,7 @@ ggplot(df8, aes(x = fecha_exp, y = total_cup_points,
 
 
 ```{r actividad9, fig.width=13, fig.height=6}
-month_levels <- c("January","February","March","April","May","June",
-                  "July","August","September","October","November","December")
-paises <- c("Mexico", "Brazil", "Colombia", "Guatemala")
 
-df9 <- datos |>
-  filter(
-    country_of_origin %in% paises,
-    expiration_year %in% c(2016L, 2017L)
-  )
 ```
 
 ---
