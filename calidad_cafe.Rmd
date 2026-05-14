@@ -1,5 +1,5 @@
 ---
-title: 'Ejercicio: Lectura y Limpieza de Datos de Café'
+title: 'Tercera Parte - Calidad del C'
 date: "`r Sys.Date()`"
 output:
   pdf_document:
@@ -39,7 +39,7 @@ datos <- readr::read_csv("coffee_ratings.csv",
 datos |> skim()
 ```
 
----
+------------------------------------------------------------------------
 
 ## Actividad 0: Análisis de valores faltantes del objeto `datos`
 
@@ -66,15 +66,12 @@ na_dataframe <- tibble(
 na_dataframe |> print()
 ```
 
----
+------------------------------------------------------------------------
 
 ## Actividad 1: Crear la columna `color2` a partir de `color`
 
-**Procedimiento:**
 
 Primero, se observo con `unique()` los datos dentro de la columna color. Se creó la columna `color2` mediante `dplyr::mutate()` combinado con un condicional vectorizado (`dplyr::case_when()`) por medio del uso de `is.na()` que detecta valores `NA` en un vector.
-
-**Resultados:**
 
 La columna `color2` asigna correctamente `#00FF66` a los 870 granos "Green", `#CCEBC5` a los 114 "Bluish-Green" y `#BFFFFF` a los 85 "Blue-Green". Los 270 valores faltantes originales (ya sea `NA` o `"None"`) de `color` se conservan como `NA`.
 
@@ -101,26 +98,25 @@ cat("Distribución de color vs color2:\n")
 print(color_results)
 ```
 
----
+------------------------------------------------------------------------
 
 ## Actividad 2: Crear la columna numérica `bag_weight2` a partir de `bag_weight`
 
-**Procedimiento:**
 
 Para extraer solo el valor numérico se emplearon funciones del paquete `stringr`:
 
-- **`stringr::str_detect(string, pattern)`**: retorna un vector lógico indicando si cada elemento del vector `string` contiene el patrón regex. Se usa para identificar los valores ambiguos que tienen coma (`","`) indicando múltiples unidades.
-- **`stringr::str_extract(string, pattern)`**: extrae la **primera** subcadena que coincide con el patrón regex. El patrón `"\\d+(\\.\\d+)?"` captura uno o más dígitos seguidos opcionalmente de un punto decimal y más dígitos.
-- **`dplyr::if_else(condition, true, false)`**: versión estricta del `ifelse()` base que respeta los tipos de datos; asigna `NA_real_` (NA de tipo `double`) cuando la condición es verdadera (valor ambiguo).
-- **`as.numeric()`**: convierte la cadena extraída a tipo numérico.
+-   **`stringr::str_detect(string, pattern)`**: retorna un vector lógico indicando si cada elemento del vector `string` contiene el patrón regex. Se usa para identificar los valores ambiguos que tienen coma (`","`) indicando múltiples unidades.
+-   **`stringr::str_extract(string, pattern)`**: extrae la **primera** subcadena que coincide con el patrón regex. El patrón `"\\d+(\\.\\d+)?"` captura uno o más dígitos seguidos opcionalmente de un punto decimal y más dígitos.
+-   **`dplyr::if_else(condition, true, false)`**: versión estricta del `ifelse()` base que respeta los tipos de datos; asigna `NA_real_` (NA de tipo `double`) cuando la condición es verdadera (valor ambiguo).
+-   **`as.numeric()`**: convierte la cadena extraída a tipo numérico.
 
-**Resultados:**
 
 Se encontraron **2 observaciones ambiguas**: `"1 kg,lbs"` y `"2 kg,lbs"`, que reciben `NA` en `bag_weight2`.
 
 ```{r actividad2}
 datos$bag_weight |> unique()
 ```
+
 Observamos que hay demasiados valores unicos
 
 ```{r actividad2}
@@ -133,6 +129,7 @@ datos$bag_weight |>
 grepl("kg,lbs", datos$bag_weight) |>
   sum()
 ```
+
 Observamos que existen dos valores ambiguous `"kg,lbs"`
 
 ```{r actividad2}
@@ -161,16 +158,12 @@ datos <- datos |>
 datos$bag_weight2 |> summary()
 ```
 
-
----
+------------------------------------------------------------------------
 
 ## Actividad 3: Crear `method1` y `method2` a partir de `processing_method`
 
-**Procedimiento:**
 
 Con `skimr::skim` observamos las especificaciones del vector `processing_method`, en general un vector muy limpio. Con `dyplr::count()` obtenemos las frecuencias de cada valor y vemos que solo hay valores separados por `"/"`, además de los valores `Other` y `NA`. Por lo que con ayuda de `stringr::str_match`, dividimos en una matriz los grupos del regex separados por `"/"`, de esta forma obtenemos una matriz en la cual podemos separa los valores en nuestras nuevas columnas `method1` y `method2`. Para identificar cuales y cuntos fueron los valores ambiguos solo falta con ver que valores de la primera columna de la matriz (`all_methods`) son `NA`.
-
-**Resultados:**
 
 El conteo de ambigüedades incluye las 170 filas con `NA` en `processing_method` más las filas con el valor `"Other"` (sin separador `"/"`).
 
@@ -201,12 +194,11 @@ cat(sprintf("Observaciones ambiguas en processing_method: %d\n", n_ambiguos))
 cat("Valores únicos ambiguos:", vals_ambiguos, "\n")
 ```
 
----
+------------------------------------------------------------------------
 
 ## Actividad 4: Crear `expiration_day`, `expiration_month` y `expiration_year`
 
 **Procedimiento:**
-
 
 **Resultados:**
 
@@ -231,13 +223,9 @@ df4 |> summary()
 df4 |> head()
 ```
 
----
+------------------------------------------------------------------------
 
 ## Actividad 5: Crear `harvest_mes` y `harvest_anio` a partir de `harvest_year`
-
-**Procedimiento:**
-
-**Resultados:**
 
 ```{r actividad5}
 datos$harvest_year |> unique()
@@ -259,15 +247,9 @@ df5 |> skim()
 sum(!is.na(df5$harvest_mes))
 ```
 
----
+------------------------------------------------------------------------
 
 ## Actividad 6: Visualización de `total_cup_points`, `acidity` y `color2`
-
-**Procedimiento:**
-
-
-**Resultados:**
-
 
 ```{r actividad6, fig.width=9, fig.height=6}
 
@@ -305,39 +287,44 @@ datos |>
   xlab(label = "Calificación/Puntos Totales") +
   ylab(label = "Acidez") +
   ggtitle(label = "Puntos totales vs. Acides por Color") +
-  theme_minimal()
+  theme_dark()
 
 ```
 
----
+------------------------------------------------------------------------
 
 ## Actividad 7: Visualización de densidad de `bag_weight2` por `species`
 
-**Procedimiento:**
-
-
-**Resultados:**
-
-
 ```{r actividad7}
-ggplot(datos, aes(x = bag_weight2, colour = species, fill = species)) +
-  geom_density(alpha = 0.5, color = NA) +
-  guides(fill = guide_legend(title = "Especies")) +
-  xlab(label = "Peso de la Bolsa") +
-  ylab(label = "Densidad") +
-  ggtitle(label = "Densidad del peso de la bolsa de café por especie")
-  theme_minimal()
+
+# ggplot(datos, aes(x = bag_weight2, colour = species, fill = species)) +
+#   geom_density(alpha = 0.5, color = NA) +
+#   guides(fill = guide_legend(title = "Especies")) +
+#   xlab(label = "Peso de la Bolsa") +
+#   ylab(label = "Densidad") +
+#   ggtitle(label = "Densidad del peso de la bolsa de café por especie")
+#   theme_minimal()
+  
+ggplot(datos, aes(x = bag_weight2, fill = species)) +
+  geom_density(alpha = 0.5) +
+  labs(
+    title = "Distribución del peso de las bolsas de café",
+    subtitle = "Comparación por especie",
+    x = "Peso de la bolsa (kg)",
+    y = "Densidad",
+    fill = "Especie:"
+  ) +
+  theme_classic() +
+  theme(
+    plot.title = element_text(face = "bold", size = 14),
+    plot.subtitle = element_text(size = 12),
+    legend.position = "top"
+  )
 ```
 
----
+------------------------------------------------------------------------
 
 ## Actividad 8: Fecha de expiración vs `total_cup_points` (México, Brazil, Colombia, Guatemala)
-
-**Procedimiento:**
-
-
-**Resultados:**
-
 
 ```{r actividad8, fig.width=12, fig.height=6}
 countries = c("Mexico", "Brazil", "Colombia", "Guatemala")
@@ -360,32 +347,123 @@ ggplot(selected_countries, aes(x = expiration_onset, y = total_cup_points,
   theme(axis.text.x = element_text(angle = 90, vjust = 0.5, hjust = 1))
 ```
 
----
+------------------------------------------------------------------------
 
 ## Actividad 9: Mes de expiración vs altitudes (México, Brasil, Colombia, Guatemala — 2016 y 2017)
 
-**Procedimiento:**
-
-
-**Resultados:**
-
 
 ```{r actividad9, fig.width=13, fig.height=6}
+paises <- c("Mexico", "Brazil", "Colombia", "Guatemala")
 
+df <- datos |>
+  filter(country_of_origin %in% paises,
+         expiration_year %in% c(2016, 2017))
+df <- df |>
+  mutate(fecha_exp = make_date(year = expiration_year,
+                               month = expiration_month,
+                               day = 1))
+df_long <- df %>%
+  select(fecha_exp,
+         altitude_mean_meters,
+         altitude_low_meters,
+         altitude_high_meters) %>%
+  drop_na() %>%
+  pivot_longer(
+    cols = c(altitude_mean_meters,
+             altitude_low_meters,
+             altitude_high_meters),
+    names_to = "tipo_altitud",
+    values_to = "altitud"
+  )
+
+ggplot(df_long, aes(x = fecha_exp, y = altitud, color = tipo_altitud)) +
+  stat_summary(fun = mean, geom = "line", size = 1.2) +
+  scale_x_date(
+      date_breaks = "2 months",
+    date_labels = "%b %Y"
+  ) +
+  labs(
+    subtitle = "México, Brasil, Colombia y Guatemala",
+    x = "Fecha de expiración",
+    y = "Altitud (metros)",
+    color = "Tipo de altitud"
+  ) +
+  theme_minimal(base_size = 13) +
+  theme(
+    plot.title = element_text(face = "bold", size = 16),
+    axis.text.x = element_text(angle = 45, hjust = 1),
+    legend.position = "top"
+  )
+
+columnasss <- c("expiration_onset", "altitude_high_meters", "altitude_low_meters", "altitude_mean_meters")
+df9 <- datos[columnasss]
+df9 |> filter()
+
+# Observamos que 
+
+df9$altitude_high_meters |> is.na() |> sum()
+df9$altitude_low_meters |> is.na() |> sum()
+df9$altitude_mean_meters |> is.na() |> sum()
+  
 ```
 
----
+------------------------------------------------------------------------
 
 ## Actividad 10: Visualización de `aftertaste`, `acidity`, `body` y `species` en un mismo canvas
 
-**Procedimiento:**
-
-
-**Resultados:**
-
 
 ```{r actividad10, fig.width=11, fig.height=6}
+
 df10 <- datos |>
   select(aftertaste, acidity, body, species) |>
   drop_na()
+
+df10 |> summary()
+
+df10 |> ggplot(aes(x = acidity,
+                   y = aftertaste,
+                   color = species,
+                   size = body)) +
+  geom_point(alpha = 0.6) +
+  scale_size(
+    name   = "Body",
+    range  = c(.1, 6),
+    breaks = c(6, 7, 8)
+  ) +
+  guides(
+    size  = guide_legend(override.aes = list(alpha = 1)),
+    color = guide_legend(override.aes = list(alpha = 1, size = 4))
+  ) +
+  labs(
+    title    = "Relación entre Aftertaste, Acidity y Body por Especie de Café",
+    subtitle = "Visualización multivariable de atributos sensoriales",
+    x        = "Acidez",
+    y        = "Aftertaste",
+    color    = "Especie"
+  ) +
+  theme_minimal(base_size = 14) +
+  theme(
+    plot.title = element_text(face = "bold"),
+    legend.position = "right"
+  )
+
+```
+
+
+```{r}
+df10 <- datos |>
+  select(aftertaste, acidity, body, species) |>
+  drop_na()
+
+df10 |> ggplot(aes(x = acidity, y = aftertaste)) +
+  geom_point(aes(colour = body), alpha = 0.6) +
+  facet_wrap(~species, ncol = 2) +
+  scale_color_viridis_c(option = "veridis") +
+  labs(
+    title = "Relación entre Acidez, Aftertaste y Body por Especie",
+    x = "Acidez",
+    y = "Aftertaste",
+    colour = "body"
+  )
+
 ```
