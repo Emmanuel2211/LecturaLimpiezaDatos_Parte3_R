@@ -240,7 +240,23 @@ df4 |> head()
 **Resultados:**
 
 ```{r actividad5}
-datos$harvest_year |> skim()
+datos$harvest_year |> unique()
+
+regex_anios = "(20)\\d{2}"
+regex_meses = "March|April|July|Julio|August|January|December"
+
+datos <- datos |> mutate(
+  harvest_anio = sapply(str_extract_all(harvest_year, regex_anios), function(x){
+    if(length(x) > 0) tail(x,1) else NA
+  }), 
+  harvest_mes = sapply(str_extract_all(harvest_year, regex_meses), function(x){
+    if(length(x) > 0) tail(x, 1) else NA
+  })
+)
+
+df5 <- datos[c("harvest_year", "harvest_anio", "harvest_mes")]
+df5 |> skim()
+sum(!is.na(df5$harvest_mes))
 ```
 
 ---
