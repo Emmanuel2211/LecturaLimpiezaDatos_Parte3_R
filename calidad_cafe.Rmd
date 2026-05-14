@@ -411,6 +411,8 @@ df9$altitude_mean_meters |> is.na() |> sum()
 
 ## Actividad 10: Visualización de `aftertaste`, `acidity`, `body` y `species` en un mismo canvas
 
+Para graficaciones multivariables, Grouping vs Faceting
+
 
 ```{r actividad10, fig.width=11, fig.height=6}
 
